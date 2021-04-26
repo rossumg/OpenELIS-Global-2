@@ -56,7 +56,7 @@ public class FhirApiWorkFlowServiceImpl implements FhirApiWorkflowService {
     private String localFhirStorePath;
     @Value("${org.openelisglobal.remote.source.uri}")
     private String[] remoteStorePaths;
-    @Value("${org.openelisglobal.remote.source.updateStatus}")
+    @Value("${org.openelisglobal.remote.source.updateStatus:false}")
     private Optional<Boolean> remoteStoreUpdateStatus;
     @Value("${org.openelisglobal.remote.source.identifier:}#{T(java.util.Collections).emptyList()}")
     private List<String> remoteStoreIdentifier;

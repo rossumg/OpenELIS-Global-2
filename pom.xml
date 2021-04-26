@@ -14,7 +14,7 @@
 	<properties>
 		<maven.java.release>11</maven.java.release>
 
-		<major.version>2</major.version>
+		<major.version>NGC-2</major.version>
 		<minor.version>3</minor.version>
 		<state.version>3</state.version><!-- 0 = alpha, 1 = beta, 2 = rc, 3 = deployable -->
 		<fix.version>8</fix.version>
