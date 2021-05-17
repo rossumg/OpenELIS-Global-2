@@ -1,6 +1,5 @@
 package org.openelisglobal.security;
 
-import java.time.Duration;
 import java.util.concurrent.TimeUnit;
 
 import javax.servlet.ServletContext;
@@ -141,6 +140,7 @@ public class SecurityConfig {
     @Configuration
     public static class defaultSecurityConfiguration extends WebSecurityConfigurerAdapter {
 
+        @SuppressWarnings("unchecked")
         @Override
         protected void configure(HttpSecurity http) throws Exception {
             CharacterEncodingFilter filter = new CharacterEncodingFilter();
@@ -152,6 +152,7 @@ public class SecurityConfig {
             http.addFilterBefore(multipartFilter, CsrfFilter.class);
 
             CacheControl.maxAge(31536000, TimeUnit.SECONDS);
+            CacheControl.noStore();
             http.authorizeRequests()
                     // allow all users to access these pages no matter authentication status
                     .antMatchers(LOGIN_PAGES).permitAll().antMatchers(RESOURCE_PAGES).permitAll()
@@ -170,9 +171,7 @@ public class SecurityConfig {
                     .headers().frameOptions().sameOrigin().httpStrictTransportSecurity()
                     .and().contentSecurityPolicy(CONTENT_SECURITY_POLICY)
                     .and().cacheControl((Customizer<HeadersConfigurer<HttpSecurity>.CacheControlConfig>) 
-                            CacheControl.noStore().noCache().mustRevalidate().maxAge(Duration.ZERO))
-                    
-                    ;
+                            CacheControl.noCache().mustRevalidate());
         }
         
         @Bean
