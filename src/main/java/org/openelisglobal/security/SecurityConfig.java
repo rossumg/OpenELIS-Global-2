@@ -1,5 +1,8 @@
 package org.openelisglobal.security;
 
+import java.time.Duration;
+import java.util.concurrent.TimeUnit;
+
 import javax.servlet.ServletContext;
 
 import org.jasypt.util.text.AES256TextEncryptor;
@@ -10,12 +13,15 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
+import org.springframework.http.CacheControl;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
+import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
+import org.springframework.security.config.annotation.web.configurers.HeadersConfigurer;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -45,6 +51,7 @@ public class SecurityConfig {
     private static final String CONTENT_SECURITY_POLICY = "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval';"
             + " connect-src 'self'; img-src 'self'; style-src 'self' 'unsafe-inline';"
             + " frame-src *.openlmis.org 'self'; frame-ancestors 'self'; object-src 'self';";
+    
 
     @Value("${encryption.general.password:dev}")
     private String encryptionPassword;
@@ -144,6 +151,7 @@ public class SecurityConfig {
             multipartFilter.setServletContext(SpringContext.getBean(ServletContext.class));
             http.addFilterBefore(multipartFilter, CsrfFilter.class);
 
+            CacheControl.maxAge(31536000, TimeUnit.SECONDS);
             http.authorizeRequests()
                     // allow all users to access these pages no matter authentication status
                     .antMatchers(LOGIN_PAGES).permitAll().antMatchers(RESOURCE_PAGES).permitAll()
@@ -159,9 +167,14 @@ public class SecurityConfig {
                     .and().sessionManagement().invalidSessionUrl("/LoginPage.do").sessionFixation().migrateSession()
                     .and().csrf().and()
                     // add security headers
-                    .headers().frameOptions().sameOrigin().contentSecurityPolicy(CONTENT_SECURITY_POLICY);
+                    .headers().frameOptions().sameOrigin().httpStrictTransportSecurity()
+                    .and().contentSecurityPolicy(CONTENT_SECURITY_POLICY)
+                    .and().cacheControl((Customizer<HeadersConfigurer<HttpSecurity>.CacheControlConfig>) 
+                            CacheControl.noStore().noCache().mustRevalidate().maxAge(Duration.ZERO))
+                    
+                    ;
         }
-
+        
         @Bean
         public AuthenticationFailureHandler customAuthenticationFailureHandler() {
             return new CustomAuthenticationFailureHandler();
