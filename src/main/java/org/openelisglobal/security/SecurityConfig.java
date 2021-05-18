@@ -30,6 +30,8 @@ import org.springframework.security.web.session.HttpSessionEventPublisher;
 import org.springframework.web.filter.CharacterEncodingFilter;
 import org.springframework.web.multipart.support.MultipartFilter;
 
+
+
 @EnableWebSecurity
 public class SecurityConfig {
     @Autowired
@@ -165,6 +167,18 @@ public class SecurityConfig {
                     .and().csrf().and()
                  // add security headers
 //                    .headers().frameOptions().sameOrigin().contentSecurityPolicy(CONTENT_SECURITY_POLICY);
+                    
+//                    https://docs.spring.io/spring-security/site/docs/5.1.13.BUILD-SNAPSHOT/reference/html/default-security-headers-2.html  
+//                    17. Default Security Headers
+//                    Spring Security allows users to easily inject the default security headers to assist in protecting their application. The default for Spring Security is to include the following headers:
+//
+//                    Cache-Control: no-cache, no-store, max-age=0, must-revalidate
+//                    Pragma: no-cache
+//                    Expires: 0
+//                    X-Content-Type-Options: nosniff
+//                    Strict-Transport-Security: max-age=31536000 ; includeSubDomains
+//                    X-Frame-Options: DENY
+//                    X-XSS-Protection: 1; mode=block
                     .headers().frameOptions().sameOrigin().httpStrictTransportSecurity()
                     .and().contentSecurityPolicy(CONTENT_SECURITY_POLICY)
                     .and().cacheControl();
