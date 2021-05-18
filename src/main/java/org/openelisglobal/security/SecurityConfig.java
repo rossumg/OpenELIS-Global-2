@@ -1,7 +1,5 @@
 package org.openelisglobal.security;
 
-import java.util.concurrent.TimeUnit;
-
 import javax.servlet.ServletContext;
 
 import org.jasypt.util.text.AES256TextEncryptor;
@@ -12,7 +10,6 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
-import org.springframework.http.CacheControl;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
 import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder;
@@ -179,13 +176,13 @@ public class SecurityConfig {
 //                    Strict-Transport-Security: max-age=31536000 ; includeSubDomains
 //                    X-Frame-Options: DENY
 //                    X-XSS-Protection: 1; mode=block
-                    .headers().frameOptions().sameOrigin().httpStrictTransportSecurity()
-                    .and().contentSecurityPolicy(CONTENT_SECURITY_POLICY)
-                    .and().cacheControl();
+                    .headers().frameOptions().sameOrigin().contentSecurityPolicy(CONTENT_SECURITY_POLICY)
+                    .and().cacheControl()
+                    ;
 
-            CacheControl.maxAge(31536000, TimeUnit.SECONDS);
-            CacheControl.noStore();
-            CacheControl.noCache();
+//            CacheControl.maxAge(31536000, TimeUnit.SECONDS);
+//            CacheControl.noStore();
+//            CacheControl.noCache();
            
         }
         
