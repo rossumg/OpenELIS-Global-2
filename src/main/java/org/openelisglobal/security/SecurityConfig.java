@@ -15,12 +15,10 @@ import org.springframework.core.annotation.Order;
 import org.springframework.http.CacheControl;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
-import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
-import org.springframework.security.config.annotation.web.configurers.HeadersConfigurer;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -151,8 +149,6 @@ public class SecurityConfig {
             multipartFilter.setServletContext(SpringContext.getBean(ServletContext.class));
             http.addFilterBefore(multipartFilter, CsrfFilter.class);
 
-            CacheControl.maxAge(31536000, TimeUnit.SECONDS);
-            CacheControl.noStore();
             http.authorizeRequests()
                     // allow all users to access these pages no matter authentication status
                     .antMatchers(LOGIN_PAGES).permitAll().antMatchers(RESOURCE_PAGES).permitAll()
@@ -167,11 +163,16 @@ public class SecurityConfig {
                     .logout().logoutUrl("/Logout.do").logoutSuccessUrl("/LoginPage.do").invalidateHttpSession(true)
                     .and().sessionManagement().invalidSessionUrl("/LoginPage.do").sessionFixation().migrateSession()
                     .and().csrf().and()
-                    // add security headers
+                 // add security headers
+//                    .headers().frameOptions().sameOrigin().contentSecurityPolicy(CONTENT_SECURITY_POLICY);
                     .headers().frameOptions().sameOrigin().httpStrictTransportSecurity()
                     .and().contentSecurityPolicy(CONTENT_SECURITY_POLICY)
-                    .and().cacheControl((Customizer<HeadersConfigurer<HttpSecurity>.CacheControlConfig>) 
-                            CacheControl.noCache().mustRevalidate());
+                    .and().cacheControl();
+
+            CacheControl.maxAge(31536000, TimeUnit.SECONDS);
+            CacheControl.noStore();
+            CacheControl.noCache();
+           
         }
         
         @Bean
