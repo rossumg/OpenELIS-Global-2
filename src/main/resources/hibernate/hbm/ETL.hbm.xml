@@ -1,0 +1,87 @@
+<?xml version="1.0"?>
+<!DOCTYPE hibernate-mapping PUBLIC "-//Hibernate/Hibernate Mapping DTD 3.0//EN"
+"http://hibernate.sourceforge.net/hibernate-mapping-3.0.dtd">
+
+<hibernate-mapping>
+	<class
+		name="org.openelisglobal.etl.valueholder.ETLRecord"
+		table="ETL" optimistic-lock="version"
+		dynamic-update="true">
+		<id name="id"
+			type="org.openelisglobal.hibernate.resources.usertype.LIMSStringNumberUserType">
+			<column name="ID" precision="10" scale="0" />
+			<generator
+				class="org.openelisglobal.hibernate.resources.StringSequenceGenerator">
+				<param name="sequence_name">etl_seq</param>
+			</generator>
+		</id>
+		<version name="lastupdated" column="LASTUPDATED"
+			type="timestamp" access="field" />
+		<property name="orderTimestamp" type="java.sql.Timestamp">
+			<column name="ORDER_TIMESTAMP" length="7" not-null="true" />
+		</property>
+		<property name="externalId" type="java.lang.String">
+			<column name="EXTERNAL_ID" length="60" not-null="true" />
+		</property>
+		<many-to-one name="patient"
+			class="org.openelisglobal.patient.valueholder.Patient" fetch="select" lazy="false">
+			<column name="patient_id" precision="10" scale="0" />
+		</many-to-one>
+		<property name="statusId"
+			type="org.openelisglobal.hibernate.resources.usertype.LIMSStringNumberUserType"
+			column="status_id" precision="10" not-null="true" />
+		<property name="data" type="java.lang.String">
+			<column name="data" not-null="true" />
+		</property>
+
+	<property name="labno" type="java.lang.String">
+		<column name="labno" not-null="true" />
+	</property>
+	<property name="identifier" type="java.lang.String">
+		<column name="identifier" not-null="true" />
+	</property>
+	<property name="sex" type="java.lang.String">
+		<column name="sex" not-null="true" />
+	</property>
+	<property name="birthdate" type="java.lang.String">
+		<column name="birthdate" not-null="true" />
+	</property>
+	<property name="age_years" type="java.lang.String">
+		<column name="age_years" not-null="true" />
+	</property>
+	<property name="age_months" type="java.lang.String">
+		<column name="age_months" not-null="true" />
+	</property>
+	<property name="age_weeks" type="java.lang.String">
+		<column name="age_weeks" not-null="true" />
+	</property>
+	<property name="date_recpt" type="java.lang.String">
+		<column name="date_recpt" not-null="true" />
+	</property>
+	<property name="date_entered" type="java.lang.String">
+		<column name="date_entered" not-null="true" />
+	</property>
+	<property name="date_collect" type="java.lang.String">
+		<column name="date_collect" not-null="true" />
+	</property>
+	<property name="code_referer" type="java.lang.String">
+		<column name="code_referer" not-null="true" />
+	</property>
+	<property name="referer" type="java.lang.String">
+		<column name="referer" not-null="true" />
+	</property>
+	<property name="program" type="java.lang.String">
+		<column name="program" not-null="true" />
+	</property>
+	<property name="order_status" type="java.lang.String">
+		<column name="order_status" not-null="true" />
+	</property>
+	<property name="test" type="java.lang.String">
+		<column name="test" not-null="true" />
+	</property>
+	<property name="result" type="java.lang.String">
+		<column name="result" not-null="true" />
+	</property>
+		
+	</class>
+</hibernate-mapping>

@@ -1,5 +1,6 @@
 package org.openelisglobal.dataexchange.fhir.service;
 
+import java.sql.Timestamp;
 import java.util.List;
 
 import org.hl7.fhir.r4.model.Reference;
@@ -7,6 +8,7 @@ import org.hl7.fhir.r4.model.Resource;
 import org.openelisglobal.dataexchange.order.valueholder.ElectronicOrder;
 import org.openelisglobal.dataexchange.order.valueholder.PortableOrder;
 import org.openelisglobal.dataexchange.resultreporting.beans.TestResultsXmit;
+import org.openelisglobal.etl.valueholder.ETLRecord;
 import org.openelisglobal.organization.valueholder.Organization;
 import org.openelisglobal.patient.action.bean.PatientManagementInfo;
 import org.openelisglobal.patient.valueholder.Patient;
@@ -44,5 +46,15 @@ public interface FhirTransformService {
     org.hl7.fhir.r4.model.Patient getFhirPatient(PatientManagementInfo patientInfo);
 
     String getIdFromLocation(String location);
+
+    List<ETLRecord> getLatestFhirforETL(Timestamp recordTimestamp);
+
+    List<String> LoadObservations();
+
+    List<String> LoadPatients();
+
+    List<String> LoadSpecimens();
+
+    List<String> LoadServiceRequests();
 
 }

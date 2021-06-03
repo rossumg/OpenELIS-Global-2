@@ -48,6 +48,9 @@ function /*void*/ showSuccessMessage( show ){
 <c:if test="${menuDef == 'DictionaryMenuDefinition'}">
   <tiles:insertAttribute name="rightDictionary" />
 </c:if>
+<c:if test="${menuDef == 'ETLMenuDefinition'}">
+  <tiles:insertAttribute name="rightETL" />
+</c:if>
 <c:if test="${menuDef == 'OrganizationMenuDefinition'}">
   <tiles:insertAttribute name="rightOrganization" />
 </c:if>

@@ -41,26 +41,39 @@ services:
             
     fhir.openelis.org:
         container_name: hapi-fhir-jpaserver
-        image: hapi-fhir-jpaserver-starter
+        image: hapiproject/hapi:v5.4.0
         depends_on:
             - database
         ports:
             - "8081:8080"
             - "8444:8443"
+        networks:
+            - default
         restart: always
         environment:
-            - JAVA_OPTS= -Dhapi.properties=/run/secrets/hapi.properties
-        volumes:
-            - ./dev/tomcat/hapi_server.xml:/usr/local/tomcat/conf/server.xml
+          SPRING_CONFIG_LOCATION: file:///run/secrets/hapi_application.yaml
+          JAVA_OPTS: "-Djavax.net.ssl.trustStore=/run/secrets/truststore  
+                      -Djavax.net.ssl.trustStorePassword=testtest 
+                      -Djavax.net.ssl.trustStoreType=pkcs12  
+                      -Djavax.net.ssl.keyStore=/run/secrets/keystore  
+                      -Djavax.net.ssl.keyStorePassword=testtest  
+                      -Djavax.net.ssl.keyStoreType=pkcs12"
+                      
+                      
         extra_hosts:
 #    this should be the loopback to the docker host. 
 #    run 
 #    /sbin/ip route|awk '/default/ { print $3 }' 
 #    inside the container to make sure the ip address is correct
 #    make sure connections to 8446 are allowed by your firewall
-            - host.openelis.org:172.20.0.1
+# docker inspect -f '{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}' hapi-fhir-jpaserver
+            - host.openelis.org:172.26.0.3
+
+        volumes:
+            - ./dev/tomcat/hapi_server.xml:/usr/local/tomcat/conf/server.xml
+           
         secrets:
-            - source: hapi.properties
+            - source: hapi_application.yaml
             - source: common.properties
             - source: keystore
             - source: truststore
@@ -69,12 +82,14 @@ volumes:
   db-data:            
 secrets:
   keystore:
-    file: ./dev/https/openelis.org.keystore
+    file: ./dev/https/greg.dev.openelis.org.keystore.p12
   truststore:
-    file: ./dev/https/openelis.org.truststore
+    file: ./dev/https/greg.dev.openelis.org.truststore.p12
   common.properties:
     file: ./dev/properties/common.properties  
   hapi.properties:
     file: ./dev/properties/hapi.properties
+  hapi_application.yaml:
+    file: ./dev/properties/hapi_application.yaml
     
     

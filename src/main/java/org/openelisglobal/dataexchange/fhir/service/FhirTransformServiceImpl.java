@@ -1,5 +1,6 @@
 package org.openelisglobal.dataexchange.fhir.service;
 
+import java.sql.Timestamp;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -34,6 +35,8 @@ import org.hl7.fhir.r4.model.ServiceRequest;
 import org.hl7.fhir.r4.model.Task;
 import org.hl7.fhir.r4.model.Task.TaskOutputComponent;
 import org.hl7.fhir.r4.model.Task.TaskStatus;
+import org.json.simple.JSONObject;
+import org.openelisglobal.common.JSONUtils;
 import org.openelisglobal.common.action.IActionConstants;
 import org.openelisglobal.common.log.LogEvent;
 import org.openelisglobal.common.services.IStatusService;
@@ -51,6 +54,7 @@ import org.openelisglobal.dataexchange.order.valueholder.PortableOrder;
 import org.openelisglobal.dataexchange.resultreporting.beans.CodedValueXmit;
 import org.openelisglobal.dataexchange.resultreporting.beans.TestResultsXmit;
 import org.openelisglobal.dataexchange.service.order.ElectronicOrderService;
+import org.openelisglobal.etl.valueholder.ETLRecord;
 import org.openelisglobal.organization.valueholder.Organization;
 import org.openelisglobal.organization.valueholder.OrganizationType;
 import org.openelisglobal.patient.action.bean.PatientManagementInfo;
@@ -197,6 +201,488 @@ public class FhirTransformServiceImpl implements FhirTransformService {
         }
         return eOrders;
     }
+    
+    @Override
+    public List<ETLRecord> getLatestFhirforETL(Timestamp recordTimestamp) {
+        LogEvent.logDebug(this.getClass().getName(), "getLatestFhirforETL", "getLatestFhirforETL ");
+
+        ServiceRequest serviceRequest = new ServiceRequest();
+        org.hl7.fhir.r4.model.Patient fhirPatient = new org.hl7.fhir.r4.model.Patient();
+        Task task = new Task();
+        List<ETLRecord> etlRecordList = new ArrayList<>();
+
+        //        try {
+        //            Bundle srBundle = (Bundle) localFhirClient.search().forResource(ServiceRequest.class)
+        //                    .prettyPrint()
+        //                    .execute();
+        //
+        //          
+        //        } catch (Exception e) {
+        //            LogEvent.logDebug(this.getClass().getName(), "getFhirOrdersById",
+        //                    "FhirTransformServiceImpl:Transform exception: " + e.toString());
+        //        }
+
+        // gnr
+        List<String> observationList = LoadObservations();
+        List<String> patientList = LoadPatients();
+        List<String> serviceRequestList = LoadServiceRequests();
+        List<String> specimenList = LoadSpecimens();
+
+        JSONObject jResultUUID = null;
+        JSONObject jSRRef = null;
+        JSONObject reqRef = null;
+        int i, j = 0;
+
+        
+        for (i = 0; i < observationList.size(); i++) {
+            ETLRecord etlRecord = new ETLRecord();
+            try {
+                String observationStr = observationList.get(i);
+                System.out.println("obStr:" + observationStr);
+                JSONObject observationJson = null;
+                observationJson = JSONUtils.getAsObject(observationStr);
+                System.out.println("obJson:" + observationJson.toString());
+                if (!JSONUtils.isEmpty(observationJson)) {
+
+                    org.json.simple.JSONArray identifier = JSONUtils.getAsArray(observationJson.get("identifier"));
+                    for (j = 0; j < identifier.size(); ++j) {
+                        System.out.println("identifier:" + identifier.get(j).toString());
+                        jResultUUID = JSONUtils.getAsObject(identifier.get(j));
+                        System.out.println("jResultUUID:" + jResultUUID.get("system").toString());
+                        System.out.println("jResultUUID:" + jResultUUID.get("value").toString());
+                    }
+                    System.out.println("valueString:" + observationJson.get("valueString").toString());
+                    System.out.println("subjectRef:" + observationJson.get("subject").toString());
+
+                    JSONObject subjectRef = null;
+                    subjectRef = JSONUtils.getAsObject(observationJson.get("subject"));
+                    System.out.println("subjectRef:" + subjectRef.get("reference"));
+
+                    JSONObject specimenRef = null;
+                    specimenRef = JSONUtils.getAsObject(observationJson.get("specimen"));
+                    System.out.println("specimenRef:" + specimenRef.get("reference"));
+
+                    org.json.simple.JSONArray serviceRequestRef = null;
+                    serviceRequestRef = JSONUtils.getAsArray(observationJson.get("basedOn"));
+                    for (j = 0; j < serviceRequestRef.size(); ++j) {
+                        System.out.println("serviceRequestRef:" + serviceRequestRef.get(j).toString());
+                        jSRRef = JSONUtils.getAsObject(serviceRequestRef.get(j));
+                        System.out.println("jSRRef:" + jSRRef.get("reference").toString());
+                    }
+                    etlRecord.setOrder_status(observationJson.get("status").toString());
+                    etlRecord.setResult(observationJson.get("valueString").toString());
+                    etlRecord.setData(observationStr);
+                }
+
+                String patientStr = patientList.get(i);
+                System.out.println("patStr:" + patientStr);
+                JSONObject patientJson = null;
+                patientJson = JSONUtils.getAsObject(patientStr);
+                System.out.println("patJson:" + patientJson.toString());
+                if (!JSONUtils.isEmpty(patientJson)) {
+
+                    org.json.simple.JSONArray identifier = JSONUtils.getAsArray(patientJson.get("identifier"));
+                    for (j = 0; j < identifier.size(); ++j) {
+                        System.out.println("identifier:" + identifier.get(j).toString());
+                        JSONObject patIds = JSONUtils.getAsObject(identifier.get(j));
+                        System.out.println("patIds:" + patIds.get("system").toString());
+                        System.out.println("patIds:" + patIds.get("value").toString());
+                        if (patIds.get("system").toString()
+                                .equalsIgnoreCase("http://openelis-global.org/pat_nationalId")) {
+                            etlRecord.setIdentifier(patIds.get("value").toString());
+                        }
+                        etlRecord.setSex(patientJson.get("gender").toString());
+                        etlRecord.setBirthdate(patientJson.get("birthDate").toString());
+                    }
+
+                    org.json.simple.JSONArray name = JSONUtils.getAsArray(patientJson.get("name"));
+                    for (j = 0; j < name.size(); ++j) {
+                        System.out.println("name:" + name.get(j).toString());
+                        JSONObject jName = JSONUtils.getAsObject(name.get(j));
+                        System.out.println("jName:" + jName.get("family").toString());
+                        System.out.println("jName:" + jName.get("given").toString());
+                    }
+                }
+
+                String serviceRequestStr = serviceRequestList.get(i);
+                System.out.println("srStr:" + serviceRequestStr);
+                JSONObject srJson = null;
+                srJson = JSONUtils.getAsObject(serviceRequestStr);
+                System.out.println("srJson:" + srJson.toString());
+                org.json.simple.JSONObject code = null;
+                org.json.simple.JSONArray coding = null;
+                org.json.simple.JSONObject jCoding = null;
+                if (!JSONUtils.isEmpty(srJson)) {
+
+                    org.json.simple.JSONArray identifier = JSONUtils.getAsArray(srJson.get("identifier"));
+                    for (j = 0; j < identifier.size(); ++j) {
+                        System.out.println("identifier:" + identifier.get(j).toString());
+                        JSONObject srIds = JSONUtils.getAsObject(identifier.get(j));
+                        System.out.println("srIds:" + srIds.get("system").toString());
+                        System.out.println("srIds:" + srIds.get("value").toString());
+                    }
+
+                    reqRef = JSONUtils.getAsObject(srJson.get("requisition"));
+                    System.out.println("srReq:" + reqRef.get("system").toString());
+                    System.out.println("srReq:" + reqRef.get("value").toString());
+                    etlRecord.setLabno(reqRef.get("value").toString());
+
+                    code = JSONUtils.getAsObject(srJson.get("code"));
+                    coding = JSONUtils.getAsArray(code.get("coding"));
+                    for (j = 0; j < coding.size(); ++j) {
+                        System.out.println("coding:" + coding.get(0).toString());
+                        jCoding = JSONUtils.getAsObject(coding.get(0));
+                        System.out.println("jCoding:" + jCoding.get("system").toString());
+                        System.out.println("jCoding:" + jCoding.get("code").toString());
+                        System.out.println("jCoding:" + jCoding.get("display").toString());
+                    }
+                    etlRecord.setDate_entered(srJson.get("authoredOn").toString());
+                    etlRecord.setTest(jCoding.get("display").toString());
+                }
+
+                String specimenStr = specimenList.get(i);
+                System.out.println("specimenStr:" + specimenStr);
+                JSONObject specimenJson = null;
+                specimenJson = JSONUtils.getAsObject(specimenStr);
+                System.out.println("specimenJson:" + specimenJson.toString());
+                if (!JSONUtils.isEmpty(specimenJson)) {
+
+                    org.json.simple.JSONArray identifier = JSONUtils.getAsArray(specimenJson.get("identifier"));
+                    for (j = 0; j < identifier.size(); ++j) {
+                        System.out.println("identifier:" + identifier.get(j).toString());
+                        JSONObject specimenId = JSONUtils.getAsObject(identifier.get(j));
+                        System.out.println("specimenId:" + specimenId.get("system").toString());
+                        System.out.println("specimenId:" + specimenId.get("value").toString());
+                    }
+
+                    code = JSONUtils.getAsObject(specimenJson.get("type"));
+                    coding = JSONUtils.getAsArray(code.get("coding"));
+                    for (j = 0; j < coding.size(); ++j) {
+                        System.out.println("coding:" + coding.get(0).toString());
+                        jCoding = JSONUtils.getAsObject(coding.get(0));
+                        System.out.println("jCoding:" + jCoding.get("system").toString());
+                        System.out.println("jCoding:" + jCoding.get("code").toString());
+                        System.out.println("jCoding:" + jCoding.get("display").toString());
+                    }
+                    etlRecord.setDate_recpt(specimenJson.get("receivedTime").toString());
+                }
+
+            } catch (org.json.simple.parser.ParseException e) {
+                e.printStackTrace();
+            }
+
+            etlRecordList.add(etlRecord);
+        }
+        return etlRecordList;
+    }
+
+    @Override
+    public List<String> LoadPatients() {
+        List<String> list = new ArrayList<String>();
+        String patientStr = new String(
+        "{"
+        +"  \"resourceType\": \"Patient\","
+        +"  \"id\": \"329f09da-0fc9-419d-9575-ace689544269\","
+        +"  \"meta\": {"
+        +"  \"versionId\": \"2\","
+        +"  \"lastUpdated\": \"2021-05-27T15:55:52.463-07:00\","
+        +"  \"source\": \"#4CaEBBCXbRZaKmtI\""
+        +"  },"
+        +"  \"text\": {"
+        +"  \"status\": \"generated\","
+        +"  },"
+        +"  \"identifier\": [ {"
+        +"  \"system\": \"http://openelis-global.org/pat_subjectNumber\","
+        +"  \"value\": \"121212\""
+        +"}, {"
+        +"  \"system\": \"http://openelis-global.org/pat_nationalId\","
+        +"  \"value\": \"121212\""
+        +"}, {"
+        +"  \"system\": \"http://openelis-global.org/pat_guid\","
+        +"    \"value\": \"329f09da-0fc9-419d-9575-ace689544269\""
+        +"  }, {"
+        +"    \"system\": \"http://openelis-global.org/pat_uuid\","
+        +"    \"value\": \"329f09da-0fc9-419d-9575-ace689544269\""
+        +"  } ],"
+        +"  \"name\": [ {"
+        +"    \"family\": \"cray\","
+        +"    \"given\": [ \"crày\" ]"
+        +"  } ],"
+        +"  \"telecom\": [ {"
+        +"    \"system\": \"phone\""
+        +"  }, {"
+        +"    \"system\": \"email\""
+        +"  }, {"
+        +"    \"system\": \"fax\""
+        +"  } ],"
+        +"  \"gender\": \"male\","
+        +"  \"birthDate\": \"1994-05-16\""
+        +"}"
+);
+        list.add(patientStr);
+        patientStr = 
+        "{" 
+        +"      \"resourceType\": \"Patient\"," 
+        +"      \"id\": \"28697d12-a750-45b1-8283-158e8f3b2f6f\"," 
+        +"      \"meta\": {" 
+        +"        \"versionId\": \"1\"," 
+        +"        \"lastUpdated\": \"2021-05-11T14:04:15.022-07:00\"," 
+        +"        \"source\": \"#V5Ie3QEBCYprWGyP\"" 
+        +"      }," 
+        +"      \"text\": {" 
+        +"        \"status\": \"generated\"," 
+        +"      }," 
+        +"      \"identifier\": [ {" 
+        +"        \"system\": \"http://openelis-global.org/pat_nationalId\"," 
+        +"        \"value\": \"CA95678\"" 
+        +"      }, {" 
+        +"        \"system\": \"http://openelis-global.org/pat_guid\"," 
+        +"        \"value\": \"28697d12-a750-45b1-8283-158e8f3b2f6f\"" 
+        +"      }, {" 
+        +"        \"system\": \"http://openelis-global.org/pat_uuid\"," 
+        +"        \"value\": \"28697d12-a750-45b1-8283-158e8f3b2f6f\"" 
+        +"      } ]," 
+        +"      \"name\": [ {" 
+        +"        \"family\": \"Erickson\"," 
+        +"        \"given\": [ \"Sharlene\" ]" 
+        +"      } ]," 
+        +"      \"gender\": \"female\"," 
+        +"      \"birthDate\": \"1974-08-25\"" 
+        +"    }";
+        list.add(patientStr);
+        return list;
+    }
+    
+    @Override
+    public List<String> LoadServiceRequests() {
+        List<String> list = new ArrayList<String>();
+        String serviceRequestStr = new String(
+        "{" 
+        +"  \"resourceType\": \"ServiceRequest\"," 
+        +"  \"id\": \"c8ba6917-5810-49cf-86b4-a642db903532\"," 
+        +"  \"meta\": {" 
+        +"    \"versionId\": \"2\"," 
+        +"    \"lastUpdated\": \"2021-05-06T12:51:58.661-07:00\"," 
+        +"    \"source\": \"#cyqENaoLKk9WbBMv\"" 
+        +"  }," 
+        +"  \"identifier\": [ {" 
+        +"    \"system\": \"http://openelis-global.org/analysis_uuid\"," 
+        +"    \"value\": \"c8ba6917-5810-49cf-86b4-a642db903532\"" 
+        +"  } ]," 
+        +"  \"requisition\": {" 
+        +"    \"system\": \"http://openelis-global.org/samp_labNo\"," 
+        +"    \"value\": \"20210000000000051\"" 
+        +"  }," 
+        +"  \"status\": \"active\"," 
+        +"  \"intent\": \"original-order\"," 
+        +"  \"priority\": \"routine\"," 
+        +"  \"code\": {" 
+        +"    \"coding\": [ {" 
+        +"      \"system\": \"http://loinc.org\"," 
+        +"      \"code\": \"94500-6\"," 
+        +"      \"display\": \"COVID-19 PCR\"" 
+        +"    } ]" 
+        +"  }," 
+        +"  \"subject\": {" 
+        +"    \"reference\": \"Patient/329f09da-0fc9-419d-9575-ace689544269\"" 
+        +"  }," 
+        +"  \"authoredOn\": \"2021-05-06T12:51:58-07:00\"," 
+        +"  \"specimen\": [ {" 
+        +"    \"reference\": \"Specimen/313513fd-f64c-4ee9-9142-910880f31767\"" 
+        +"  } ]" 
+        +" }" 
+        );
+        
+        list.add(serviceRequestStr);
+        serviceRequestStr = 
+        "{" 
+        +"      \"resourceType\": \"ServiceRequest\"," 
+        +"      \"id\": \"0b5e317e-fda0-4b21-b4bd-7f1db48328e5\"," 
+        +"      \"meta\": {" 
+        +"        \"versionId\": \"2\"," 
+        +"        \"lastUpdated\": \"2021-05-20T18:29:41.580-07:00\"," 
+        +"        \"source\": \"#ItyHOGLWHwxGDnyN\"" 
+        +"      }," 
+        +"      \"identifier\": [ {" 
+        +"        \"system\": \"http://openelis-global.org/analysis_uuid\"," 
+        +"        \"value\": \"0b5e317e-fda0-4b21-b4bd-7f1db48328e5\"" 
+        +"      } ]," 
+        +"      \"requisition\": {" 
+        +"        \"system\": \"http://openelis-global.org/samp_labNo\"," 
+        +"        \"value\": \"20210000000000159\"" 
+        +"      }," 
+        +"      \"status\": \"active\"," 
+        +"      \"intent\": \"original-order\"," 
+        +"      \"category\": [ {" 
+        +"        \"coding\": [ {" 
+        +"          \"system\": \"http://openelis-global.org/sample_program\"," 
+        +"          \"code\": \"1400\"," 
+        +"          \"display\": \"1400\"" 
+        +"        } ]" 
+        +"      } ]," 
+        +"      \"priority\": \"routine\"," 
+        +"      \"code\": {" 
+        +"        \"coding\": [ {" 
+        +"          \"system\": \"http://loinc.org\"," 
+        +"          \"code\": \"94500-6\"," 
+        +"          \"display\": \"COVID-19 PCR\"" 
+        +"        } ]" 
+        +"      }," 
+        +"      \"subject\": {" 
+        +"        \"reference\": \"Patient/5dc3d795-1d16-47c7-9708-ac6b8416d670\"" 
+        +"      }," 
+        +"      \"authoredOn\": \"2021-05-20T18:29:41-07:00\"," 
+        +"      \"requester\": {" 
+        +"        \"reference\": \"Practitioner/1bc2ad64-a16e-45b9-b2ad-169124893ef1\"" 
+        +"      }," 
+        +"      \"specimen\": [ {" 
+        +"        \"reference\": \"Specimen/d00235b4-8401-4b0b-ac0d-94dd67be799b\"" 
+        +"      } ]"
+        +"}";
+        list.add(serviceRequestStr);
+        return list;
+    }
+    
+    @Override
+    public List<String> LoadSpecimens() {
+        List<String> list = new ArrayList<String>();
+        String specimenStr = new String(
+                "{" 
+                        +"  \"resourceType\": \"Specimen\"," 
+                        +"  \"id\": \"313513fd-f64c-4ee9-9142-910880f31767\"," 
+                        +"  \"meta\": {" 
+                        +"    \"versionId\": \"1\"," 
+                        +"    \"lastUpdated\": \"2021-05-06T12:16:44.243-07:00\"," 
+                        +"    \"source\": \"#SYYftPeogJs3qLf2\"" 
+                        +"  }," 
+                        +"  \"identifier\": [ {" 
+                        +"    \"system\": \"http://openelis-global.org/sampleItem_uuid\"," 
+                        +"    \"value\": \"313513fd-f64c-4ee9-9142-910880f31767\"" 
+                        +"  } ]," 
+                        +"  \"accessionIdentifier\": {" 
+                        +"    \"system\": \"http://openelis-global.org/sampleItem_labNo\"," 
+                        +"    \"value\": \"20210000000000051-1\"" 
+                        +"  }," 
+                        +"  \"status\": \"available\"," 
+                        +"  \"type\": {" 
+                        +"    \"coding\": [ {" 
+                        +"      \"system\": \"http://openelis-global.org/sampleType\"," 
+                        +"      \"code\": \"Fluid\"," 
+                        +"      \"display\": \"Fluid\"" 
+                        +"    } ]" 
+                        +"  }," 
+                        +"  \"subject\": {" 
+                        +"    \"reference\": \"Patient/329f09da-0fc9-419d-9575-ace689544269\"" 
+                        +"  }," 
+                        +"  \"receivedTime\": \"2021-05-06T12:16:44-07:00\"," 
+                        +"  \"request\": [ {" 
+                        +"    \"reference\": \"ServiceRequest/c8ba6917-5810-49cf-86b4-a642db903532\"" 
+                        +"  } ]" 
+                        +"}" 
+                        );
+        list.add(specimenStr);
+        specimenStr = 
+                "{"
+                        +"      \"resourceType\": \"Specimen\","
+                        +"      \"id\": \"3bbfcc48-b526-47e7-a4d8-8b23bef9b4a9\","
+                        +"      \"meta\": {"
+                        +"        \"versionId\": \"1\","
+                        +"        \"lastUpdated\": \"2021-04-29T16:58:51.510-07:00\","
+                        +"        \"source\": \"#lWpUeCrJ7acg2bLv\""
+                        +"      },"
+                        +"      \"identifier\": [ {"
+                        +"        \"system\": \"http://openelis-global.org/sampleItem_uuid\","
+                        +"        \"value\": \"3bbfcc48-b526-47e7-a4d8-8b23bef9b4a9\""
+                        +"      } ],"
+                        +"      \"accessionIdentifier\": {"
+                        +"        \"system\": \"http://openelis-global.org/sampleItem_labNo\","
+                        +"        \"value\": \"20210000000000033-1\""
+                        +"      },"
+                        +"      \"status\": \"available\","
+                        +"      \"type\": {"
+                        +"        \"coding\": [ {"
+                        +"          \"system\": \"http://openelis-global.org/sampleType\","
+                        +"          \"code\": \"Swab\","
+                        +"          \"display\": \"Swab\""
+                        +"        } ]"
+                        +"      },"
+                        +"      \"subject\": {"
+                        +"        \"reference\": \"Patient/329f09da-0fc9-419d-9575-ace689544269\""
+                        +"      },"
+                        +"      \"receivedTime\": \"2021-04-29T16:58:51-07:00\","
+                        +"      \"request\": [ {"
+                        +"        \"reference\": \"ServiceRequest/b1eaae7f-4b56-4ea2-aeef-6e3d60c824b7\""
+                        +"      } ]"
+                        +" }";
+
+        list.add(specimenStr);
+        return list;
+    }
+        
+        
+    
+    @Override
+    public List<String> LoadObservations() {
+        List<String> list = new ArrayList<String>();
+        String observationStr = new String(
+        "{" 
+        +"  \"resourceType\": \"Observation\"," 
+        +"  \"id\": \"770c29a9-7927-4b56-99c9-f82bd03fa498\"," 
+        +"  \"meta\": {" 
+        +"    \"versionId\": \"1\"," 
+        +"    \"lastUpdated\": \"2021-05-06T12:51:58.661-07:00\"," 
+        +"    \"source\": \"#cyqENaoLKk9WbBMv\"" 
+        +"  }," 
+        +"  \"identifier\": [ {" 
+        +"    \"system\": \"http://openelis-global.org/result_uuid\"," 
+        +"    \"value\": \"770c29a9-7927-4b56-99c9-f82bd03fa498\"" 
+        +"  } ]," 
+        +"  \"basedOn\": [ {" 
+        +"    \"reference\": \"ServiceRequest/c8ba6917-5810-49cf-86b4-a642db903532\"" 
+        +"  } ]," 
+        +"  \"status\": \"preliminary\"," 
+        +"  \"subject\": {" 
+        +"    \"reference\": \"Patient/329f09da-0fc9-419d-9575-ace689544269\"" 
+        +"  }," 
+        +"  \"valueString\": \"SARS-COV-2 RNA NOT DETECTED\"," 
+        +"  \"specimen\": {" 
+        +"    \"reference\": \"Specimen/313513fd-f64c-4ee9-9142-910880f31767\"" 
+        +"  }" 
+        +"}" 
+        );
+        
+        list.add(observationStr);
+        observationStr = 
+        "{" 
+        +"      \"resourceType\": \"Observation\"," 
+        +"     \"id\": \"7e7e0352-6bd2-41b7-8f29-2f256504ba23\"," 
+        +"      \"meta\": {" 
+        +"        \"versionId\": \"1\"," 
+        +"        \"lastUpdated\": \"2021-05-06T12:51:34.970-07:00\"," 
+        +"        \"source\": \"#KDaMEJtsyz4J9bpM\"" 
+        +"      }," 
+        +"      \"identifier\": [ {" 
+        +"        \"system\": \"http://openelis-global.org/result_uuid\"," 
+        +"        \"value\": \"7e7e0352-6bd2-41b7-8f29-2f256504ba23\"" 
+        +"      } ]," 
+        +"      \"basedOn\": [ {" 
+        +"        \"reference\": \"ServiceRequest/469d6708-a7e7-4829-ad5e-1c8ea3ea4a3b\"" 
+        +"      } ]," 
+        +"      \"status\": \"final\"," 
+        +"      \"subject\": {" 
+        +"        \"reference\": \"Patient/c77a2ed8-3481-4e95-ae4f-2cfc56184794\"" 
+        +"      }," 
+        +"      \"valueString\": \"SARS-CoV-2 RNA DETECTED\"," 
+        +"      \"specimen\": {" 
+        +"        \"reference\": \"Specimen/906f9f8c-90cd-411e-98ed-3b04ee107c89\"" 
+        +"      }" 
+        +"    }" 
+        ;
+        list.add(observationStr);
+        
+        return list;
+    }
+
 
     @Override
     public void CreateFhirFromOESample(TestResultsXmit result, Patient patient) {
@@ -341,7 +827,7 @@ public class FhirTransformServiceImpl implements FhirTransformService {
 //      return (fhirContext.newJsonParser().encodeResourceToString(fhirPatient)
 //              + fhirContext.newJsonParser()
 //                      .encodeResourceToString(oBundle.getEntryFirstRep().getResource())
-//              + fhirContext.newJsonParser()
+//              + fhirContext.new JSONObject batchTest = JSONUtils.getAsObject(form.getJsonWad()); JSONObject batchTest = JSONUtils.getAsObject(form.getJsonWad());Parser()
 //                      .encodeResourceToString(drBundle.getEntryFirstRep().getResource()));
     }
 

@@ -25,4 +25,5 @@ public interface IOrderPersister {
     String getServiceUserId();
 
     void cancelOrder(String referringOrderNumber);
+
 }

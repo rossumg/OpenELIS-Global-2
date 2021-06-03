@@ -31,7 +31,7 @@ public class AdminFormFields {
         TypeOfTestResultMenu, UnitOfMeasureMenu, TestAnalyteTestResult, LoginUserMenu, SystemUserMenu, UserRoleMenu,
         SystemModuleMenu, SystemUserSectionMenu, SystemUserModuleMenu, UnifiedSystemUserMenu, TestUsageAggregatation,
         RESULT_REPORTING_CONFIGURATION, PRINTED_REPORTS_CONFIGURATION, WORKPLAN_CONFIGURATION,
-        NON_CONFORMITY_CONFIGURATION, PATIENT_ENTRY_CONFIGURATION,
+        NON_CONFORMITY_CONFIGURATION, PATIENT_ENTRY_CONFIGURATION, ETLMenu
     }
 
     private static AdminFormFields instance = null;

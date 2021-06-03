@@ -287,7 +287,7 @@ public class DBOrderPersister implements IOrderPersister {
             throw e;
         }
     }
-
+    
     @Override
     public String getServiceUserId() {
         return SERVICE_USER_ID;

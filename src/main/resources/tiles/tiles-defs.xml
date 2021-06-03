@@ -132,6 +132,8 @@
 		template="/pages/menu/masterListsTab/masterListsPageRight.jsp">
 		<put-attribute name="rightDictionary"
 			value="dictionaryMenuDefinition" />
+		<put-attribute name="rightETL"
+			value="ETLMenuDefinition" />
 		<put-attribute name="rightOrganization"
 			value="organizationMenuDefinition" />
 		<put-attribute name="rightTestSection"
@@ -151,6 +153,12 @@
 		<put-attribute name="body"
 			value="/pages/dictionary/dictionaryMenu.jsp" />
 	</definition>
+	
+	<definition name="ETLMenuDefinition"
+		extends="baseMenuSelectListDefinition">
+		<put-attribute name="body"
+			value="/pages/etl/etlMenu.jsp" />
+	</definition>
 
 	<!--bugzilla 1413 -->
 	<definition name="dictionaryMenuBodyDefinition"
@@ -160,10 +168,22 @@
 		<put-attribute name="right"
 			value="dictionaryMenuDefinition" />
 	</definition>
+	<definition name="ETLMenuBodyDefinition"
+		template="/pages/menu/masterListsTab/masterListsPage.jsp">
+		<put-attribute name="left"
+			value="/pages/menu/masterListsTab/masterListsPageLeft.jsp" />
+		<put-attribute name="right"
+			value="ETLMenuDefinition" />
+	</definition>
 	<definition name="dictionaryMenuPageDefinition"
 		extends="masterListsPageDefinition">
 		<put-attribute name="body"
 			value="dictionaryMenuBodyDefinition" />
+	</definition>
+		<definition name="ETLMenuPageDefinition"
+		extends="masterListsPageDefinition">
+		<put-attribute name="body"
+			value="ETLMenuBodyDefinition" />
 	</definition>
 	<!--end bugzilla 1413 -->
 
