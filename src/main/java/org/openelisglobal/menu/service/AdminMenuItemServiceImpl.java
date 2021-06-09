@@ -161,6 +161,11 @@ public class AdminMenuItemServiceImpl implements AdminMenuItemService, Configura
         curItem.setPath("/ValidationConfigurationMenu.do");
         curItem.setMessageKey("validationconfiguration.browse.title");
         adminMenuItems.add(curItem);
+        
+        curItem = new AdminMenuItem();
+        curItem.setPath("/ETLMenu.do");
+        curItem.setMessageKey("etl.browse.title");
+        adminMenuItems.add(curItem);
 
         curItem = new AdminMenuItem();
         curItem.setPath("/ExternalConnectionsMenu.do");
