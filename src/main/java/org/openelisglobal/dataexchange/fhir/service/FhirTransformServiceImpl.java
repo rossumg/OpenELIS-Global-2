@@ -3,6 +3,8 @@ package org.openelisglobal.dataexchange.fhir.service;
 import java.sql.Timestamp;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
+import java.time.LocalDate;
+import java.time.Period;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
@@ -211,22 +213,23 @@ public class FhirTransformServiceImpl implements FhirTransformService {
         Task task = new Task();
         List<ETLRecord> etlRecordList = new ArrayList<>();
 
-        //        try {
-        //            Bundle srBundle = (Bundle) localFhirClient.search().forResource(ServiceRequest.class)
-        //                    .prettyPrint()
-        //                    .execute();
-        //
-        //          
-        //        } catch (Exception e) {
-        //            LogEvent.logDebug(this.getClass().getName(), "getFhirOrdersById",
-        //                    "FhirTransformServiceImpl:Transform exception: " + e.toString());
-        //        }
+//                try {
+//                    Bundle srBundle = (Bundle) localFhirClient.search().forResource(ServiceRequest.class)
+//                            .prettyPrint()
+//                            .execute();
+//        
+//                  
+//                } catch (Exception e) {
+//                    LogEvent.logDebug(this.getClass().getName(), "getFhirOrdersById",
+//                            "FhirTransformServiceImpl:Transform exception: " + e.toString());
+//                }
 
         // gnr
         List<String> observationList = LoadObservations();
         List<String> patientList = LoadPatients();
         List<String> serviceRequestList = LoadServiceRequests();
         List<String> specimenList = LoadSpecimens();
+        List<String> practitionerList = LoadPractitioners();
 
         JSONObject jResultUUID = null;
         JSONObject jSRRef = null;
@@ -292,15 +295,55 @@ public class FhirTransformServiceImpl implements FhirTransformService {
                             etlRecord.setIdentifier(patIds.get("value").toString());
                         }
                         etlRecord.setSex(patientJson.get("gender").toString());
-                        etlRecord.setBirthdate(patientJson.get("birthDate").toString());
+//                      1994-05-16
+                        try {
+                            String timestampToDate = patientJson.get("birthDate").toString().substring(0,10);
+                            SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd");
+                            Date parsedDate = dateFormat.parse(timestampToDate);
+                            Timestamp timestamp = new java.sql.Timestamp(parsedDate.getTime());
+                            etlRecord.setBirthdate(timestamp);
+                        } catch(Exception e) { 
+                            e.printStackTrace();
+                        }
                     }
-
+                    
                     org.json.simple.JSONArray name = JSONUtils.getAsArray(patientJson.get("name"));
                     for (j = 0; j < name.size(); ++j) {
                         System.out.println("name:" + name.get(j).toString());
                         JSONObject jName = JSONUtils.getAsObject(name.get(j));
                         System.out.println("jName:" + jName.get("family").toString());
                         System.out.println("jName:" + jName.get("given").toString());
+                        etlRecord.setLast_name(jName.get("family").toString());
+                        org.json.simple.JSONArray givenName = JSONUtils.getAsArray(jName.get("given"));
+                        etlRecord.setFirst_name(givenName.get(0).toString());
+                    }
+                    
+                    org.json.simple.JSONArray address = JSONUtils.getAsArray(patientJson.get("address"));
+                    for (j = 0; j < name.size(); ++j) {
+                        System.out.println("address:" + address.get(j).toString());
+                        JSONObject jAddress = JSONUtils.getAsObject(address.get(j));
+                        System.out.println("jAddress:" + jAddress.get("line").toString());
+                        System.out.println("jAddress:" + jAddress.get("city").toString());
+                        System.out.println("jAddress:" + jAddress.get("country").toString());
+                        etlRecord.setAddress_street(jAddress.get("line").toString());
+                        etlRecord.setAddress_city(jAddress.get("city").toString());
+                        etlRecord.setAddress_country(jAddress.get("country").toString());
+                    }
+                    
+                    org.json.simple.JSONArray telecom = JSONUtils.getAsArray(patientJson.get("telecom"));
+                    for (j = 0; j < telecom.size(); ++j) {
+                        System.out.println("telecom:" + telecom.get(j).toString());
+                        JSONObject jTelecom = JSONUtils.getAsObject(telecom.get(j));
+                        
+                        if (jTelecom.get("system").toString().equalsIgnoreCase("home phone")) {
+                                System.out.println("jTelecom:" + jTelecom.get("system").toString());
+                                System.out.println("jTelecom:" + jTelecom.get("value").toString());
+                                etlRecord.setHome_phone(jTelecom.get("value").toString());
+                        } else if (jTelecom.get("system").toString().equalsIgnoreCase("work phone")) {
+                                System.out.println("jTelecom:" + jTelecom.get("system").toString());
+                                System.out.println("jTelecom:" + jTelecom.get("value").toString());
+                                etlRecord.setWork_phone(jTelecom.get("value").toString());
+                        }
                     }
                 }
 
@@ -326,6 +369,26 @@ public class FhirTransformServiceImpl implements FhirTransformService {
                     System.out.println("srReq:" + reqRef.get("system").toString());
                     System.out.println("srReq:" + reqRef.get("value").toString());
                     etlRecord.setLabno(reqRef.get("value").toString());
+                    
+                    code = JSONUtils.getAsObject(srJson.get("category"));
+                    coding = JSONUtils.getAsArray(code.get("coding"));
+                    for (j = 0; j < coding.size(); ++j) {
+                        System.out.println("coding:" + coding.get(0).toString());
+                        jCoding = JSONUtils.getAsObject(coding.get(0));
+                        System.out.println("jCoding:" + jCoding.get("system").toString());
+                        System.out.println("jCoding:" + jCoding.get("code").toString());
+                        System.out.println("jCoding:" + jCoding.get("display").toString());
+                    }
+                    etlRecord.setProgram(jCoding.get("display").toString());
+                    
+                    reqRef = JSONUtils.getAsObject(srJson.get("locationReference"));
+                    System.out.println("srReq:" + reqRef.get("system").toString());
+                    System.out.println("srReq:" + reqRef.get("value").toString());
+                    etlRecord.setCode_referer(reqRef.get("value").toString());
+                    
+                    reqRef = JSONUtils.getAsObject(srJson.get("requester"));
+                    System.out.println("srReq:" + reqRef.get("reference").toString());
+                    etlRecord.setReferer(reqRef.get("reference").toString());
 
                     code = JSONUtils.getAsObject(srJson.get("code"));
                     coding = JSONUtils.getAsArray(code.get("coding"));
@@ -336,7 +399,18 @@ public class FhirTransformServiceImpl implements FhirTransformService {
                         System.out.println("jCoding:" + jCoding.get("code").toString());
                         System.out.println("jCoding:" + jCoding.get("display").toString());
                     }
-                    etlRecord.setDate_entered(srJson.get("authoredOn").toString());
+                    
+//                    2021-05-06T12:51:58-07:00
+                    try {
+                        String timestampToDate = srJson.get("authoredOn").toString().substring(0,10);
+                        SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd");
+                        Date parsedDate = dateFormat.parse(timestampToDate);
+                        Timestamp timestamp = new java.sql.Timestamp(parsedDate.getTime());
+                        etlRecord.setDate_entered(timestamp);
+                    } catch(Exception e) { 
+                        e.printStackTrace();
+                    }
+                    
                     etlRecord.setTest(jCoding.get("display").toString());
                 }
 
@@ -364,8 +438,52 @@ public class FhirTransformServiceImpl implements FhirTransformService {
                         System.out.println("jCoding:" + jCoding.get("code").toString());
                         System.out.println("jCoding:" + jCoding.get("display").toString());
                     }
-                    etlRecord.setDate_recpt(specimenJson.get("receivedTime").toString());
+//                  2021-04-29T16:58:51-07:00
+                    try {
+                        String timestampToDate = specimenJson.get("receivedTime").toString().substring(0,10);
+                        SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd");
+                        Date parsedDate = dateFormat.parse(timestampToDate);
+                        Timestamp timestamp = new java.sql.Timestamp(parsedDate.getTime());
+                        etlRecord.setDate_recpt(timestamp);
+                    } catch(Exception e) { 
+                        e.printStackTrace();
+                    }
                 }
+                
+                String practitionerStr = practitionerList.get(i);
+                System.out.println("practitionerStr:" + practitionerStr);
+                JSONObject practitionerJson = null;
+                practitionerJson = JSONUtils.getAsObject(practitionerStr);
+                System.out.println("practitionerJson:" + practitionerJson.toString());
+                if (!JSONUtils.isEmpty(practitionerJson)) {
+                    org.json.simple.JSONArray name = JSONUtils.getAsArray(practitionerJson.get("name"));
+                    for (j = 0; j < name.size(); ++j) {
+                        System.out.println("name:" + name.get(j).toString());
+                        JSONObject jName = JSONUtils.getAsObject(name.get(j));
+                        System.out.println("jName:" + jName.get("family").toString());
+                        System.out.println("jName:" + jName.get("given").toString());
+                        org.json.simple.JSONArray givenName = JSONUtils.getAsArray(jName.get("given"));
+                        etlRecord.setReferer(givenName.get(0).toString() + " " + 
+                                jName.get("family").toString());
+                    }
+                }
+                
+                LocalDate birthdate = LocalDate.parse(etlRecord.getBirthdate().toString().substring(0,10));
+                LocalDate date_entered = LocalDate.parse(etlRecord.getDate_entered().toString().substring(0,10));
+                if ((etlRecord.getBirthdate() != null) && (etlRecord.getDate_entered() != null)) {
+                    int age_days = Period.between(birthdate, date_entered).getDays();
+                    int age_years = Period.between(birthdate, date_entered).getYears();
+                    int age_months = Period.between(birthdate, date_entered).getMonths();
+                    int age_weeks = Math.round(age_days)/7;
+
+                    if (age_days > 3) etlRecord.setAge_weeks(age_weeks + 1);
+                    if (age_weeks > 2) etlRecord.setAge_months(age_months + 1);
+                    if (age_months > 5) etlRecord.setAge_years(age_years+ 1);
+                    
+                    etlRecord.setAge_months((12*age_years) + age_months); 
+                    etlRecord.setAge_weeks((52*age_years) + (4*age_months) + age_weeks); 
+                }
+                
 
             } catch (org.json.simple.parser.ParseException e) {
                 e.printStackTrace();
@@ -375,6 +493,37 @@ public class FhirTransformServiceImpl implements FhirTransformService {
         }
         return etlRecordList;
     }
+    
+    @Override
+    public List<String> LoadPractitioners() {
+        List<String> list = new ArrayList<String>();
+        String practitionerStr = new String(
+                "{" 
+        +"      \"resourceType\": \"Practitioner\"," 
+        +"      \"id\": \"1bc2ad64-a16e-45b9-b2ad-169124893ef1\"," 
+        +"      \"meta\": {" 
+        +"        \"versionId\": \"1\"," 
+        +"        \"lastUpdated\": \"2021-05-20T18:28:56.010-07:00\"," 
+        +"        \"source\": \"#B5UHocnLZEvaLUgl\"" 
+        +"      }," 
+        +"      \"name\": [ {" 
+        +"        \"family\": \"Steele\"," 
+        +"        \"given\": [ \"Caleb\" ]" 
+        +"      } ]," 
+        +"      \"telecom\": [ {" 
+        +"        \"system\": \"phone\"" 
+        +"      }, {" 
+        +"        \"system\": \"email\"" 
+        +"      }, {" 
+        +"        \"system\": \"fax\"" 
+        +"      } ]" 
+        +"    }" 
+        );
+        list.add(practitionerStr);
+        list.add(practitionerStr);
+        return list;
+    }
+
 
     @Override
     public List<String> LoadPatients() {
@@ -408,13 +557,24 @@ public class FhirTransformServiceImpl implements FhirTransformService {
         +"    \"family\": \"cray\","
         +"    \"given\": [ \"crày\" ]"
         +"  } ],"
+        
+        +"  \"address\": [ {"
+        +"    \"line\": \"123 Anystreet\","
+        +"    \"city\": \"Seattle\","
+        +"    \"country\": \"United States\""
+        +"  } ],"
+
+        
         +"  \"telecom\": [ {"
-        +"    \"system\": \"phone\""
+        +"    \"system\": \"home phone\""
+        +"        \"value\": \"513 555 1212\"" 
         +"  }, {"
         +"    \"system\": \"email\""
         +"  }, {"
-        +"    \"system\": \"fax\""
+        +"    \"system\": \"work phone\""
+        +"        \"value\": \"604 555 1212\"" 
         +"  } ],"
+        
         +"  \"gender\": \"male\","
         +"  \"birthDate\": \"1994-05-16\""
         +"}"
@@ -446,6 +606,23 @@ public class FhirTransformServiceImpl implements FhirTransformService {
         +"        \"family\": \"Erickson\"," 
         +"        \"given\": [ \"Sharlene\" ]" 
         +"      } ]," 
+        
+        +"  \"address\": [ {"
+        +"    \"line\": \"321 Anystreet\","
+        +"    \"city\": \"Seattle\","
+        +"    \"country\": \"United States\""
+        +"  } ],"
+        
+        +"  \"telecom\": [ {"
+        +"    \"system\": \"home phone\""
+        +"        \"value\": \"513 555 1212\"" 
+        +"  }, {"
+        +"    \"system\": \"email\""
+        +"  }, {"
+        +"    \"system\": \"work phone\""
+        +"        \"value\": \"604 555 1212\"" 
+        +"  } ],"
+        
         +"      \"gender\": \"female\"," 
         +"      \"birthDate\": \"1974-08-25\"" 
         +"    }";
@@ -469,12 +646,28 @@ public class FhirTransformServiceImpl implements FhirTransformService {
         +"    \"system\": \"http://openelis-global.org/analysis_uuid\"," 
         +"    \"value\": \"c8ba6917-5810-49cf-86b4-a642db903532\"" 
         +"  } ]," 
+        
+        +"  \"locationReference\": {" 
+        +"  \"system\": \"http://openelis-global.org/locationReference\"," 
+        +"  \"value\": \"Lab01\"" 
+        +"  }," 
+        
+        
         +"  \"requisition\": {" 
         +"    \"system\": \"http://openelis-global.org/samp_labNo\"," 
         +"    \"value\": \"20210000000000051\"" 
         +"  }," 
         +"  \"status\": \"active\"," 
         +"  \"intent\": \"original-order\"," 
+        
+        +"  \"category\": {" 
+        +"    \"coding\": [ {" 
+        +"      \"system\": \"http://openelis-global.org/sample_program\"," 
+        +"      \"code\": \"1400\"," 
+        +"      \"display\": \"1400\"" 
+        +"    } ]" 
+        +"  }," 
+
         +"  \"priority\": \"routine\"," 
         +"  \"code\": {" 
         +"    \"coding\": [ {" 
@@ -487,6 +680,9 @@ public class FhirTransformServiceImpl implements FhirTransformService {
         +"    \"reference\": \"Patient/329f09da-0fc9-419d-9575-ace689544269\"" 
         +"  }," 
         +"  \"authoredOn\": \"2021-05-06T12:51:58-07:00\"," 
+        +"  \"requester\": {" 
+        +"    \"reference\": \"Practitioner/1bc2ad64-a16e-45b9-b2ad-169124893ef1\"" 
+        +"  }," 
         +"  \"specimen\": [ {" 
         +"    \"reference\": \"Specimen/313513fd-f64c-4ee9-9142-910880f31767\"" 
         +"  } ]" 
@@ -507,19 +703,27 @@ public class FhirTransformServiceImpl implements FhirTransformService {
         +"        \"system\": \"http://openelis-global.org/analysis_uuid\"," 
         +"        \"value\": \"0b5e317e-fda0-4b21-b4bd-7f1db48328e5\"" 
         +"      } ]," 
+        
+        +"      \"locationReference\": {" 
+        +"      \"system\": \"http://openelis-global.org/locationReference\"," 
+        +"      \"value\": \"Lab01\"" 
+        +"      }," 
+        
         +"      \"requisition\": {" 
         +"        \"system\": \"http://openelis-global.org/samp_labNo\"," 
         +"        \"value\": \"20210000000000159\"" 
         +"      }," 
         +"      \"status\": \"active\"," 
-        +"      \"intent\": \"original-order\"," 
-        +"      \"category\": [ {" 
+        +"      \"intent\": \"original-order\","
+        
+        +"      \"category\": {" 
         +"        \"coding\": [ {" 
         +"          \"system\": \"http://openelis-global.org/sample_program\"," 
         +"          \"code\": \"1400\"," 
         +"          \"display\": \"1400\"" 
         +"        } ]" 
-        +"      } ]," 
+        +"      },"
+        
         +"      \"priority\": \"routine\"," 
         +"      \"code\": {" 
         +"        \"coding\": [ {" 

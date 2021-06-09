@@ -71,14 +71,23 @@ public class ETLRecord extends BaseObject<String> {
     
     private String labno;
     private String identifier;
+    private String first_name;
+    private String last_name;
+    private String home_phone;
+    private String work_phone;
     private String sex;
-    private String birthdate;
-    private String age_years;
-    private String age_months;
-    private String age_weeks;
-    private String date_recpt;
-    private String date_entered;
-    private String date_collect;
+    private Timestamp birthdate;
+    private String address_street;
+    private String address_city;
+    private String address_country;
+
+    private Integer age_years;
+    private Integer age_months;
+    private Integer age_weeks;
+    
+    private Timestamp date_recpt;
+    private Timestamp date_entered;
+    private Timestamp date_collect;
     private String code_referer;
     private String referer;
     private String program;
@@ -151,8 +160,6 @@ public class ETLRecord extends BaseObject<String> {
         this.data = data;
     }
     
- 
-
     public void setPatient(ValueHolder patient) {
         this.patient = patient;
     }
@@ -180,60 +187,60 @@ public class ETLRecord extends BaseObject<String> {
     public void setSex(String sex) {
         this.sex = sex;
     }
-
-    public String getBirthdate() {
+    
+    public Timestamp getBirthdate() {
         return birthdate;
     }
 
-    public void setBirthdate(String birthdate) {
+    public void setBirthdate(Timestamp birthdate) {
         this.birthdate = birthdate;
     }
 
-    public String getAge_years() {
+    public int getAge_years() {
         return age_years;
     }
 
-    public void setAge_years(String age_years) {
+    public void setAge_years(int age_years) {
         this.age_years = age_years;
     }
 
-    public String getAge_months() {
+    public int getAge_months() {
         return age_months;
     }
 
-    public void setAge_months(String age_months) {
+    public void setAge_months(int age_months) {
         this.age_months = age_months;
     }
 
-    public String getAge_weeks() {
+    public int getAge_weeks() {
         return age_weeks;
     }
 
-    public void setAge_weeks(String age_weeks) {
+    public void setAge_weeks(int age_weeks) {
         this.age_weeks = age_weeks;
     }
 
-    public String getDate_recpt() {
+    public Timestamp getDate_recpt() {
         return date_recpt;
     }
 
-    public void setDate_recpt(String date_recpt) {
+    public void setDate_recpt(Timestamp date_recpt) {
         this.date_recpt = date_recpt;
     }
 
-    public String getDate_entered() {
+    public Timestamp getDate_entered() {
         return date_entered;
     }
 
-    public void setDate_entered(String date_entered) {
+    public void setDate_entered(Timestamp date_entered) {
         this.date_entered = date_entered;
     }
 
-    public String getDate_collect() {
+    public Timestamp getDate_collect() {
         return date_collect;
     }
 
-    public void setDate_collect(String date_collect) {
+    public void setDate_collect(Timestamp date_collect) {
         this.date_collect = date_collect;
     }
 
@@ -286,5 +293,61 @@ public class ETLRecord extends BaseObject<String> {
     }
 
     private String result;
+    
+    public String getFirst_name() {
+        return first_name;
+    }
+
+    public void setFirst_name(String first_name) {
+        this.first_name = first_name;
+    }
+
+    public String getLast_name() {
+        return last_name;
+    }
+
+    public void setLast_name(String last_name) {
+        this.last_name = last_name;
+    }
+
+    public String getHome_phone() {
+        return home_phone;
+    }
+
+    public void setHome_phone(String home_phone) {
+        this.home_phone = home_phone;
+    }
+
+    public String getWork_phone() {
+        return work_phone;
+    }
+
+    public void setWork_phone(String work_phone) {
+        this.work_phone = work_phone;
+    }
+
+    public String getAddress_street() {
+        return address_street;
+    }
+
+    public void setAddress_street(String address_street) {
+        this.address_street = address_street;
+    }
+
+    public String getAddress_city() {
+        return address_city;
+    }
+
+    public void setAddress_city(String address_city) {
+        this.address_city = address_city;
+    }
+
+    public String getAddress_country() {
+        return address_country;
+    }
+
+    public void setAddress_country(String address_country) {
+        this.address_country = address_country;
+    }
 
 }

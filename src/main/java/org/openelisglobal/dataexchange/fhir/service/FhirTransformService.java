@@ -57,4 +57,6 @@ public interface FhirTransformService {
 
     List<String> LoadServiceRequests();
 
+    List<String> LoadPractitioners();
+
 }

@@ -40,30 +40,59 @@
 	<property name="identifier" type="java.lang.String">
 		<column name="identifier" not-null="true" />
 	</property>
+	
+	<property name="first_name" type="java.lang.String">
+		<column name="first_name" not-null="true" />
+	</property>
+	<property name="last_name" type="java.lang.String">
+		<column name="last_name" not-null="true" />
+	</property>
+	<property name="home_phone" type="java.lang.String">
+		<column name="home_phone" not-null="true" />
+	</property>
+	<property name="work_phone" type="java.lang.String">
+		<column name="work_phone" not-null="true" />
+	</property>
+	
 	<property name="sex" type="java.lang.String">
 		<column name="sex" not-null="true" />
 	</property>
-	<property name="birthdate" type="java.lang.String">
-		<column name="birthdate" not-null="true" />
+	<property name="birthdate" type="java.sql.Timestamp">
+		<column name="birthdate" length="7" not-null="true" />
 	</property>
-	<property name="age_years" type="java.lang.String">
-		<column name="age_years" not-null="true" />
+	
+	<property name="address_street" type="java.lang.String">
+		<column name="address_street" not-null="true" />
 	</property>
-	<property name="age_months" type="java.lang.String">
-		<column name="age_months" not-null="true" />
+	<property name="address_city" type="java.lang.String">
+		<column name="address_city" not-null="true" />
 	</property>
-	<property name="age_weeks" type="java.lang.String">
-		<column name="age_weeks" not-null="true" />
+	<property name="address_country" type="java.lang.String">
+		<column name="address_country" not-null="true" />
 	</property>
-	<property name="date_recpt" type="java.lang.String">
-		<column name="date_recpt" not-null="true" />
+	
+	
+	<property name="age_years" 
+		type="java.lang.Integer"
+		column="age_years" precision="10" not-null="true" />
+	<property name="age_months" 
+		type="java.lang.Integer"
+		column="age_months" precision="10" not-null="true" />
+	<property name="age_weeks" 
+		type="java.lang.Integer"
+		column="age_weeks" precision="10" not-null="true" />
+	
+	
+	<property name="date_recpt" type="java.sql.Timestamp">
+		<column name="date_recpt" length="7" not-null="true" />
 	</property>
-	<property name="date_entered" type="java.lang.String">
-		<column name="date_entered" not-null="true" />
+	<property name="date_entered" type="java.sql.Timestamp">
+		<column name="date_entered" length="7" not-null="true" />
 	</property>
-	<property name="date_collect" type="java.lang.String">
-		<column name="date_collect" not-null="true" />
+	<property name="date_collect" type="java.sql.Timestamp">
+		<column name="date_collect" length="7" not-null="true" />
 	</property>
+	
 	<property name="code_referer" type="java.lang.String">
 		<column name="code_referer" not-null="true" />
 	</property>
