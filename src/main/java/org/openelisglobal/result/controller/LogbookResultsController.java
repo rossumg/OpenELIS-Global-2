@@ -286,7 +286,7 @@ public class LogbookResultsController extends LogbookResultsBaseController {
             return findForward(FWD_FAIL_INSERT, form);
         }
 
-//  gnr: shows current session records, can be current, stale/empty vs. other user
+//  Shows current session records, can be current, stale/empty vs. other user
 //        ie: empty when another user saved and hasn't reloaded.
 
         List<Result> checkPagedResults = (List<Result>) request.getSession()
@@ -316,11 +316,138 @@ public class LogbookResultsController extends LogbookResultsBaseController {
 
         ResultsPaging paging = new ResultsPaging();
         paging.updatePagedResults(request, form);
+
+        // gnr
+//        a    |  si   |   s    | accession_number  |   r    |   sh   |  pat   |  pro   |    pro_fn    |    pro_ln     
+//        --------+-------+--------+-------------------+--------+--------+--------+--------+--------------+---------------
+//         164427 | 99598 | 162747 | 20210000000000099 | 163913 | 162703 | 137408 | 162721 | SWAB         | OROPHARYNGEAL
+//         164428 | 99599 | 162748 | 20210000000000100 | 163914 | 162704 | 137409 | 162722 | SHYAMAL      | TAJAH
+//         164429 | 99600 | 162749 | 20210000000000101 | 163915 | 162705 | 137410 | 162723 | SWAB         | OROPHARYNGEAL
+//         164430 | 99601 | 162750 | 20210000000000102 | 163916 | 162706 | 137411 | 162724 | RUDRA AVISEK | RAMBURUTH
+//         164431 | 99602 | 162751 | 20210000000000103 | 163917 | 162707 | 137412 | 162725 | SWAB         | OROPHARYNGEAL
+
+        if (false) {
+            TestResultItem testResultItem = new TestResultItem();
+            testResultItem.setAccessionNumber("20210000000000100");
+            testResultItem.setAnalysisId("164428"); 
+            //            analysisMethod(null);    
+            //            analysisStatusId    null    
+            //            considerRejectReason    "" (id=16538)   
+            //            dictionaryResults   null    
+            testResultItem.setDisplayResultAsLog(false);   
+            testResultItem.setFailedValidation(    false);
+            //          forceTechApproval   null
+            testResultItem.setHasQualifiedResult(  false   );
+            //          initialSampleCondition  null
+            testResultItem.setChildReflex(   false   );
+            testResultItem.setIsGroupSeparator(    false   );
+            testResultItem.setIsModified(  true    );
+            testResultItem.setReflexGroup(   false   );
+            testResultItem.setServingAsTestGroupIdentifier(  false   );
+            testResultItem.setUserChoiceReflex(  false   );
+            testResultItem.setLowerAbnormalRange(  0.0 );
+            testResultItem.setLowerNormalRange(    0.0 );
+            //          multiSelectResultValues null
+            //          nationalId  null
+            //          nextVisitDate   null
+            //          testResultItem.setnonconforming   false
+            //          testResultItem.setnormal  true
+            //          normalRange "" (id=16538)
+            //          note    "" (id=16538)
+            testResultItem.setNotIncludedInWorkplan(   false   );
+            //          pastNotes   null
+            //          patientInfo null
+            //          patientName null
+            //          qualifiedDictionaryId   null
+            //          qualifiedResultId   null
+            //          qualifiedResultValue    "" (id=16538)
+            testResultItem.setReadOnly(    false   );
+            //          receivedDate    null
+            testResultItem.setReferralCanceled(    false   );
+            //          referralId  "" (id=16538)
+            //          referralReasonId    "" (id=16538)
+            //          testResultItem.setreferredOut false
+            //          reflexJSONResult    null
+            testResultItem.setReflexParentGroup(   0   );
+            testResultItem.setRejected(    false   );
+            testResultItem.setRejectReasonId(  "0"  );
+            //        remarks null
+            testResultItem.setRemove(  "no" );
+            testResultItem.setReportable(  false   );
+            //        result  null
+            //         TODO testResultItem.setResultDisplayType   TestResultItem$ResultDisplayType  (id=16541)
+            //        resultId    "" (id=16538)
+            testResultItem.setResultLimitId(   "294"     );
+            testResultItem.setResultType(  "D"   );
+            testResultItem.setResultValue( "821"     );
+            testResultItem.setSampleGroupingNumber(    1   );
+            //        sampleSource    null
+            //        sampleType  null
+            //        sequenceNumber  null
+            testResultItem.setShadowReferredOut(   false   );
+            testResultItem.setShadowRejected(  false   );
+            testResultItem.setShadowResultValue(   "821"    );
+            testResultItem.setShowSampleDetails(   true    );
+            //        siblingReflexKey    null
+            //        testResultItem.setsignificantDigits   -1
+            //        technician  null
+            //        technicianSignatureId   "" (id=16538)
+            testResultItem.setTestDate(    "10/06/2021");
+            testResultItem.setTestId(  "378" );
+            //        testKit1InventoryId null
+            //        testKitId   "" (id=16538)
+            testResultItem.setTestKitInactive( false   );
+            //        testMethod  null
+            //        testName    null
+            //        testSortOrder   null
+            //        thisReflexKey   null
+            //        unitsOfMeasure  "" (id=16538)
+            //        upperAbnormalRange  0.0
+            //        upperNormalRange    0.0
+            testResultItem.setValid(   true    );
+
+            ResultsUpdateDataSet actionDataSet = new ResultsUpdateDataSet("215");
+            List<TestResultItem> tests = new ArrayList<TestResultItem>();
+            tests.add(testResultItem);
+            actionDataSet.filterModifiedItems(tests);
+
+            createResultsFromItems(actionDataSet, supportReferrals, alwaysValidate, useTechnicianName, statusRuleSet);
+            createAnalysisOnlyUpdates(actionDataSet);
+
+            try {
+                logbookPersistService.persistDataSet(actionDataSet, updaters, getSysUserId(request));
+                try {
+                    fhirTransformService.transformPersistResultsEntryFhirObjects(actionDataSet);
+                } catch (FhirTransformationException | FhirPersistanceException e) {
+                    LogEvent.logError(e);
+                }
+            } catch (LIMSRuntimeException e) {
+                String errorMsg;
+                if (e.getException() instanceof StaleObjectStateException) {
+                    errorMsg = "errors.OptimisticLockException";
+                } else {
+                    LogEvent.logDebug(e);
+                    errorMsg = "errors.UpdateException";
+                }
+            }
+
+            for (IResultUpdate updater : updaters) {
+                try {
+                    updater.postTransactionalCommitUpdate(actionDataSet);
+                } catch (Exception e) {
+                    LogEvent.logError(this.getClass().getName(), "showLogbookResultsUpdate",
+                            "error doing a post transactional commit");
+                    LogEvent.logError(e);
+                }
+            }
+            
+            return findForward(FWD_SUCCESS_INSERT, form);
+        } // end if
+        
         List<TestResultItem> tests = paging.getResults(request);
-
         ResultsUpdateDataSet actionDataSet = new ResultsUpdateDataSet(getSysUserId(request));
+        
         actionDataSet.filterModifiedItems(tests);
-
         Errors errors = actionDataSet.validateModifiedItems();
 
         if (errors.hasErrors()) {
@@ -362,6 +489,8 @@ public class LogbookResultsController extends LogbookResultsBaseController {
                 LogEvent.logError(e);
             }
         }
+        
+        // gnr end loop
 
         redirectAttributes.addFlashAttribute(FWD_SUCCESS, true);
         if (GenericValidator.isBlankOrNull(form.getType())) {

@@ -63,6 +63,9 @@ public class ETLMenuController extends BaseMenuController<Dictionary> {
 //        
 //        intention to share example json with front end user.
         
+        
+        
+        
         List<ETLRecord> etlRecordList = fhirTransformService.getLatestFhirforETL(DateUtil.getNowAsTimestamp());
         for (ETLRecord etlRecord: etlRecordList) {
             etlService.insert(etlRecord);

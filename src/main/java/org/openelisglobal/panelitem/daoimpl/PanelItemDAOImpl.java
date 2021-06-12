@@ -251,11 +251,6 @@ public class PanelItemDAOImpl extends BaseDAOImpl<PanelItem, String> implements 
             throw new LIMSRuntimeException("Error in PanelItem getPanelItemsForPanel(String panelId)", e);
         }
         
-        System.out.println(">>>:");
-        for (PanelItem item: list) {
-            System.out.println(">>>:" + item.getTest().getName());
-        }
-
         return list;
 
     }

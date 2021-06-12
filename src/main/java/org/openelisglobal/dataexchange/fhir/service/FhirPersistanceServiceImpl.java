@@ -151,6 +151,9 @@ public class FhirPersistanceServiceImpl implements FhirPersistanceService {
             LogEvent.logDebug(this.getClass().getName(), "",
                     "creating resources: " + fhirContext.newJsonParser().encodeResourceToString(transactionBundle));
             transactionResponseBundle = localFhirClient.transaction().withBundle(transactionBundle).execute();
+            
+            System.out.println(">>>: " + "created resources: "
+                    + fhirContext.newJsonParser().encodeResourceToString(transactionResponseBundle));
             LogEvent.logDebug(this.getClass().getName(), "", "created resources: "
                     + fhirContext.newJsonParser().encodeResourceToString(transactionResponseBundle));
         } catch (Exception e) {

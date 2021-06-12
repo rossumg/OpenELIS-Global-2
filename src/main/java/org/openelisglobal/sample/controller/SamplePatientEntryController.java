@@ -240,6 +240,7 @@ public class SamplePatientEntryController extends BaseSampleEntryController {
 
         try {
             samplePatientService.persistData(updateData, patientUpdate, patientInfo, form, request);
+            
             try {
                 fhirTransformService.transformPersistOrderEntryFhirObjects(updateData, patientInfo);
             } catch (FhirTransformationException | FhirPersistanceException e) {
