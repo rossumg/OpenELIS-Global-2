@@ -16,6 +16,7 @@ import org.hl7.fhir.r4.model.Bundle.BundleEntryComponent;
 import org.hl7.fhir.r4.model.Bundle.BundleType;
 import org.hl7.fhir.r4.model.DiagnosticReport;
 import org.hl7.fhir.r4.model.Identifier;
+import org.hl7.fhir.r4.model.Observation;
 import org.hl7.fhir.r4.model.Organization;
 import org.hl7.fhir.r4.model.Patient;
 import org.hl7.fhir.r4.model.Resource;
@@ -181,6 +182,24 @@ public class FhirPersistanceServiceImpl implements FhirPersistanceService {
             }
         }
         return serviceRequests;
+    }
+    
+    @Override
+    public List<Observation> getAllObservations() {
+        List<Observation> observations = new ArrayList<>();
+        Bundle searchBundle = localFhirClient.search().forResource(Observation.class)//
+                .returnBundle(Bundle.class)//
+                .execute();
+        for (BundleEntryComponent entry : searchBundle.getEntry()) {
+            observations.add((Observation) entry.getResource());
+        }
+        while (searchBundle.getLink(IBaseBundle.LINK_NEXT) != null) {
+            searchBundle = localFhirClient.loadPage().next(searchBundle).execute();
+            for (BundleEntryComponent entry : searchBundle.getEntry()) {
+                observations.add((Observation) entry.getResource());
+            }
+        }
+        return observations;
     }
 
     @Override

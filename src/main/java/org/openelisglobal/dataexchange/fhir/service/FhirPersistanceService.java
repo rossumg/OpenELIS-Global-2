@@ -6,6 +6,7 @@ import java.util.Optional;
 
 import org.hl7.fhir.r4.model.Bundle;
 import org.hl7.fhir.r4.model.DiagnosticReport;
+import org.hl7.fhir.r4.model.Observation;
 import org.hl7.fhir.r4.model.Organization;
 import org.hl7.fhir.r4.model.Patient;
 import org.hl7.fhir.r4.model.Resource;
@@ -52,6 +53,8 @@ public interface FhirPersistanceService {
     Bundle makeTransactionBundleForCreate(Map<String, Resource> resources);
 
     Bundle createFhirResourcesInFhirStore(Map<String, Resource> resources) throws FhirLocalPersistingException;
+
+    List<Observation> getAllObservations();
 
 //    Optional<ServiceRequest> getTaskBasedOnServiceRequests(List<ServiceRequest> serviceRequests);
 

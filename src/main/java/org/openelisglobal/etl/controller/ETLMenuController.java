@@ -12,7 +12,6 @@ import org.openelisglobal.common.controller.BaseMenuController;
 import org.openelisglobal.common.exception.LIMSRuntimeException;
 import org.openelisglobal.common.form.AdminOptionMenuForm;
 import org.openelisglobal.common.log.LogEvent;
-import org.openelisglobal.common.util.DateUtil;
 import org.openelisglobal.common.util.SystemConfiguration;
 import org.openelisglobal.common.validator.BaseErrors;
 import org.openelisglobal.dataexchange.fhir.service.FhirTransformService;
@@ -20,7 +19,6 @@ import org.openelisglobal.dictionary.service.DictionaryService;
 import org.openelisglobal.dictionary.valueholder.Dictionary;
 import org.openelisglobal.etl.form.ETLMenuForm;
 import org.openelisglobal.etl.service.ETLService;
-import org.openelisglobal.etl.valueholder.ETLRecord;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Controller;
 import org.springframework.validation.BindingResult;
@@ -66,10 +64,10 @@ public class ETLMenuController extends BaseMenuController<Dictionary> {
         
         
         
-        List<ETLRecord> etlRecordList = fhirTransformService.getLatestFhirforETL(DateUtil.getNowAsTimestamp());
-        for (ETLRecord etlRecord: etlRecordList) {
-            etlService.insert(etlRecord);
-        }       
+//        List<ETLRecord> etlRecordList = fhirTransformService.getLatestFhirforETL(DateUtil.getNowAsTimestamp());
+//        for (ETLRecord etlRecord: etlRecordList) {
+//            etlService.insert(etlRecord);
+//        }       
         
         String forward = performMenuAction(form, request);
         if (FWD_FAIL.equals(forward)) {

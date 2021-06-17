@@ -1,12 +1,12 @@
 package org.openelisglobal.dataexchange.fhir.service;
 
-import java.sql.Timestamp;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Future;
 
 import org.hl7.fhir.r4.model.Bundle;
 import org.hl7.fhir.r4.model.Identifier;
+import org.hl7.fhir.r4.model.Observation;
 import org.hl7.fhir.r4.model.Practitioner;
 import org.hl7.fhir.r4.model.Reference;
 import org.hl7.fhir.r4.model.Resource;
@@ -64,8 +64,6 @@ public interface FhirTransformService {
 
     boolean setTempIdIfMissing(Resource resource, TempIdGenerator tempIdGenerator);
 
-    List<ETLRecord> getLatestFhirforETL(Timestamp recordTimestamp);
-
     List<String> LoadObservations();
 
     List<String> LoadPatients();
@@ -75,5 +73,7 @@ public interface FhirTransformService {
     List<String> LoadServiceRequests();
 
     List<String> LoadPractitioners();
+
+    List<ETLRecord> getLatestFhirforETL(List<Observation> observationBatch);
 
 }

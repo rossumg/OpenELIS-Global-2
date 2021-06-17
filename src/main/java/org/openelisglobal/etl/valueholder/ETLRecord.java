@@ -20,9 +20,7 @@ package org.openelisglobal.etl.valueholder;
 import java.sql.Timestamp;
 
 import org.openelisglobal.common.valueholder.BaseObject;
-import org.openelisglobal.common.valueholder.ValueHolder;
 import org.openelisglobal.internationalization.MessageUtil;
-import org.openelisglobal.patient.valueholder.Patient;
 import org.openelisglobal.statusofsample.valueholder.StatusOfSample;
 
 public class ETLRecord extends BaseObject<String> {
@@ -63,7 +61,8 @@ public class ETLRecord extends BaseObject<String> {
 
     private String id;
     private String externalId;
-    private ValueHolder patient;
+    private String patientId;
+
     private String statusId;
     private StatusOfSample status; // not persisted
     private Timestamp orderTimestamp;
@@ -98,10 +97,6 @@ public class ETLRecord extends BaseObject<String> {
 //    Antibody Covid (IgM/IgG)(Blood)
 //    COVID-19 PCR(Sputum)
 
-    public ETLRecord() {
-        patient = new ValueHolder();
-    }
-
     @Override
     public String getId() {
         return id;
@@ -120,12 +115,12 @@ public class ETLRecord extends BaseObject<String> {
         this.externalId = externalId;
     }
 
-    public Patient getPatient() {
-        return (Patient) patient.getValue();
+    public String getPatientId() {
+        return patientId;
     }
 
-    public void setPatient(Patient patient) {
-        this.patient.setValue(patient);
+    public void setPatientId(String patientId) {
+        this.patientId = patientId;
     }
 
     public String getStatusId() {
@@ -160,10 +155,6 @@ public class ETLRecord extends BaseObject<String> {
         this.data = data;
     }
     
-    public void setPatient(ValueHolder patient) {
-        this.patient = patient;
-    }
-
     public String getLabno() {
         return labno;
     }

@@ -10,6 +10,7 @@ import java.util.concurrent.TimeoutException;
 import javax.servlet.http.HttpServletResponse;
 
 import org.hl7.fhir.r4.model.Bundle;
+import org.hl7.fhir.r4.model.Observation;
 import org.itech.fhir.dataexport.api.service.DataExportService;
 import org.itech.fhir.dataexport.core.model.DataExportTask;
 import org.itech.fhir.dataexport.core.service.DataExportTaskService;
@@ -17,7 +18,10 @@ import org.openelisglobal.common.controller.BaseController;
 import org.openelisglobal.common.log.LogEvent;
 import org.openelisglobal.dataexchange.fhir.exception.FhirLocalPersistingException;
 import org.openelisglobal.dataexchange.fhir.exception.FhirPersistanceException;
+import org.openelisglobal.dataexchange.fhir.service.FhirPersistanceService;
 import org.openelisglobal.dataexchange.fhir.service.FhirTransformService;
+import org.openelisglobal.etl.service.ETLService;
+import org.openelisglobal.etl.valueholder.ETLRecord;
 import org.openelisglobal.patient.valueholder.Patient;
 import org.openelisglobal.sample.service.SampleService;
 import org.openelisglobal.sample.valueholder.Sample;
@@ -40,6 +44,46 @@ public class FhirTransformationController extends BaseController {
     private DataExportService dataExportService;
     @Autowired
     private DataExportTaskService dataExportTaskService;
+    @Autowired
+    private FhirPersistanceService fhirPersistanceService;
+    @Autowired
+    private ETLService etlService;
+    
+    @GetMapping("/FhirToDataMart")
+    public void etl(@RequestParam(defaultValue = "false") Boolean checkAll,
+            @RequestParam(defaultValue = "100") int batchSize, @RequestParam(defaultValue = "1") int threads,
+            HttpServletResponse response) throws FhirLocalPersistingException, IOException {
+        
+        List<ETLRecord> etlRecordList = new ArrayList<>();
+
+        int batches = 0;
+        int batchFailure = 0;
+        List<Observation> observations = new ArrayList<>();
+        observations = fhirPersistanceService.getAllObservations();
+        
+        LogEvent.logDebug(this.getClass().getName(), "getLatestFhirforETL",
+                "results to convert: " + observations.size());
+        
+        List<Observation> observationBatch = new ArrayList<>();
+        for (int i = 0; i < observations.size(); ++i) {
+            observationBatch.add(observations.get(i));
+            if (i % batchSize == batchSize - 1 || i + 1 == observations.size()) {
+                LogEvent.logDebug(this.getClass().getName(), "",
+                        "persisting batch " + (i - batchSize + 1) + "-" + i + " of " + observations.size());
+                try {
+                    etlRecordList = fhirTransformService.getLatestFhirforETL(observationBatch);
+                } catch (Exception e) {
+                    LogEvent.logError(e);
+                    LogEvent.logError(this.getClass().getName(), "getLatestFhirforETL",
+                            "error with batch " + (i - batchSize + 1) + "-" + i);
+                }
+                for (ETLRecord etlRecord: etlRecordList) {
+                    etlService.insert(etlRecord);
+                } 
+            }
+        }
+        response.getWriter().println("ETLRecord batches total: " + batches);
+    }
 
     @GetMapping("/OEToFhir")
     public void transformPersistMissingFhirObjects(@RequestParam(defaultValue = "false") Boolean checkAll,
@@ -124,6 +168,8 @@ public class FhirTransformationController extends BaseController {
         response.getWriter().println("sample batches total: " + batches);
         response.getWriter().println("sample batches failed: " + batchFailure);
     }
+    
+
 
     private void waitForResults(List<Future<Bundle>> promises) throws Exception {
         for (Future<Bundle> promise : promises) {

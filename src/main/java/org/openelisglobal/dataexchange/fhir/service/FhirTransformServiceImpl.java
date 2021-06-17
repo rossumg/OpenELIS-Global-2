@@ -4,6 +4,8 @@ import java.math.BigDecimal;
 import java.sql.Timestamp;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
+import java.time.LocalDate;
+import java.time.Period;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
@@ -15,9 +17,9 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 import org.apache.commons.validator.GenericValidator;
+import org.hl7.fhir.r4.model.Address;
 import org.hl7.fhir.r4.model.Annotation;
 import org.hl7.fhir.r4.model.Bundle;
-import org.hl7.fhir.r4.model.Bundle.BundleEntryComponent;
 import org.hl7.fhir.r4.model.CodeableConcept;
 import org.hl7.fhir.r4.model.Coding;
 import org.hl7.fhir.r4.model.ContactPoint;
@@ -193,12 +195,14 @@ public class FhirTransformServiceImpl implements FhirTransformService {
         Map<String, Task> tasks = new HashMap<>();
         Map<String, org.hl7.fhir.r4.model.Patient> fhirPatients = new HashMap<>();
         Map<String, Specimen> specimens = new HashMap<>();
+        Map<String, Practitioner> practitioners = new HashMap<>();
         Map<String, ServiceRequest> serviceRequests = new HashMap<>();
         Map<String, DiagnosticReport> diagnosticReports = new HashMap<>();
         Map<String, Observation> observations = new HashMap<>();
         for (String sampleId : sampleIds) {
             Sample sample = sampleService.get(sampleId);
             Patient patient = sampleHumanService.getPatientForSample(sample);
+            Provider provider = sampleHumanService.getProviderForSample(sample);
             List<SampleItem> sampleItems = sampleItemService.getSampleItemsBySampleId(sampleId);
             List<Analysis> analysises = analysisService.getAnalysesBySampleId(sampleId);
             List<Result> results = resultService.getResultsForSample(sample);
@@ -209,6 +213,10 @@ public class FhirTransformServiceImpl implements FhirTransformService {
             if (patient.getFhirUuid() == null) {
                 patient.setFhirUuid(UUID.randomUUID());
             }
+            if (provider.getFhirUuid() == null) {
+                provider.setFhirUuid(UUID.randomUUID());
+            }
+            
             sampleItems.stream().forEach((e) -> {
                 if (e.getFhirUuid() == null) {
                     e.setFhirUuid(UUID.randomUUID());
@@ -237,6 +245,12 @@ public class FhirTransformServiceImpl implements FhirTransformService {
                 LogEvent.logWarn("", "", "patient collision with id: " + fhirPatient.getIdElement().getIdPart());
             }
             fhirPatients.put(fhirPatient.getIdElement().getIdPart(), fhirPatient);
+            
+            Practitioner practitioner = this.transformProviderToPractitioner(provider);
+            if (practitioners.containsKey(practitioner.getIdElement().getIdPart())) {
+                LogEvent.logWarn("", "", "practitioner collision with id: " + practitioner.getIdElement().getIdPart());
+            }
+            practitioners.put(practitioner.getIdElement().getIdPart(), practitioner);
 
             for (SampleItem sampleItem : sampleItems) {
                 Specimen specimen = this.transformToSpecimen(sampleItem);
@@ -276,6 +290,9 @@ public class FhirTransformServiceImpl implements FhirTransformService {
         }
         for (org.hl7.fhir.r4.model.Patient fhirPatient : fhirPatients.values()) {
             this.addToOperations(fhirOperations, tempIdGenerator, fhirPatient);
+        }
+        for (Practitioner practitioner : practitioners.values()) {
+            this.addToOperations(fhirOperations, tempIdGenerator, practitioner);
         }
         for (Specimen specimen : specimens.values()) {
             this.addToOperations(fhirOperations, tempIdGenerator, specimen);
@@ -372,6 +389,8 @@ public class FhirTransformServiceImpl implements FhirTransformService {
     private List<ContactPoint> transformToTelcom(Person person) {
         List<ContactPoint> contactPoints = new ArrayList<>();
         contactPoints.add(new ContactPoint().setSystem(ContactPointSystem.PHONE).setValue(person.getPrimaryPhone()));
+        contactPoints.add(new ContactPoint().setSystem(ContactPointSystem.OTHER).setValue(person.getHomePhone()));
+        contactPoints.add(new ContactPoint().setSystem(ContactPointSystem.SMS).setValue(person.getWorkPhone()));
         contactPoints.add(new ContactPoint().setSystem(ContactPointSystem.EMAIL).setValue(person.getEmail()));
         contactPoints.add(new ContactPoint().setSystem(ContactPointSystem.FAX).setValue(person.getFax()));
         return contactPoints;
@@ -466,6 +485,12 @@ public class FhirTransformServiceImpl implements FhirTransformService {
         humanName.addGiven(patient.getPerson().getFirstName());
         humanNameList.add(humanName);
         fhirPatient.setName(humanNameList);
+        
+        Address address = new Address();
+        address.addLine(patient.getPerson().getStreetAddress());
+        address.setCity(patient.getPerson().getCity());
+        address.setCountry(patient.getPerson().getCountry());
+        fhirPatient.addAddress(address);
 
         try {
             if (patient.getBirthDateForDisplay() != null) {
@@ -573,10 +598,13 @@ public class FhirTransformServiceImpl implements FhirTransformService {
         serviceRequest.addSpecimen(
                 this.createReferenceFor(ResourceType.Specimen, analysis.getSampleItem().getFhirUuidAsString()));
         serviceRequest.setSubject(this.createReferenceFor(ResourceType.Patient, patient.getFhirUuidAsString()));
+        
         if (provider != null && provider.getFhirUuid() != null) {
             serviceRequest
                     .setRequester(this.createReferenceFor(ResourceType.Practitioner, provider.getFhirUuidAsString()));
         }
+        // sample.getReferringId needs to be the org uuid
+//        serviceRequest.addLocationReference(this.createReferenceFor(ResourceType.Person, sample.getReferringId()));
 
         return serviceRequest;
     }
@@ -1061,9 +1089,8 @@ public class FhirTransformServiceImpl implements FhirTransformService {
     }
     
     @Override
-    public List<ETLRecord> getLatestFhirforETL(Timestamp recordTimestamp) {
+    public List<ETLRecord> getLatestFhirforETL(List<Observation> observations) {
         LogEvent.logDebug(this.getClass().getName(), "getLatestFhirforETL", "getLatestFhirforETL ");
-        ServiceRequest serviceRequest = new ServiceRequest();
 
         List<ETLRecord> etlRecordList = new ArrayList<>();
 
@@ -1075,15 +1102,13 @@ public class FhirTransformServiceImpl implements FhirTransformService {
         org.json.simple.JSONObject code = null;
         org.json.simple.JSONArray coding = null;
         org.json.simple.JSONObject jCoding = null;
+        
         // gnr
 
-        Bundle oBundle = (Bundle) localFhirClient.search().forResource(Observation.class)
-                .prettyPrint()
-                .execute();
-        for (BundleEntryComponent entry : oBundle.getEntry()) {
-            fhirObservation = (Observation) entry.getResource();
-            System.out.println(">>>: " + fhirContext.newJsonParser().encodeResourceToString(fhirObservation));
-            System.out.println(">>>: " + fhirObservation.getBasedOnFirstRep().getReference().toString());
+        for (Observation observation : observations) {
+            fhirObservation = (Observation) observation;
+            System.out.println("observation: " +  fhirContext.newJsonParser().encodeResourceToString(fhirObservation));
+            LogEvent.logDebug(this.getClass().getName(), "getLatestFhirforETL",   fhirObservation.getBasedOnFirstRep().getReference().toString());
             String srString = fhirObservation.getBasedOnFirstRep().getReference().toString();
             String srUuidString = srString.substring(srString.lastIndexOf("/") + 1);
 
@@ -1095,13 +1120,13 @@ public class FhirTransformServiceImpl implements FhirTransformService {
 
             if (srBundle.hasEntry()) {
                 fhirServiceRequest = (ServiceRequest) srBundle.getEntryFirstRep().getResource();
-                System.out.println(">>>: " + fhirContext.newJsonParser().encodeResourceToString(fhirServiceRequest));
+                LogEvent.logDebug(this.getClass().getName(), "getLatestFhirforETL",   fhirContext.newJsonParser().encodeResourceToString(fhirServiceRequest));
                 //                    get Practitioner
             }
 
             //pat
 //            fhirPatient = fhirPersistanceService.getPatientByUuid(fhirObservation.getSubject().getIdentifier().getValue()).orElseThrow();
-            System.out.println(">>>: " + fhirObservation.getSubject().getReference().toString());
+            LogEvent.logDebug(this.getClass().getName(), "getLatestFhirforETL",   fhirObservation.getSubject().getReference().toString());
             String patString = fhirObservation.getSubject().getReference().toString();
             String patUuidString = patString.substring(patString.lastIndexOf("/") + 1);
 
@@ -1112,11 +1137,11 @@ public class FhirTransformServiceImpl implements FhirTransformService {
 
             if (patBundle.hasEntry()) {
                 fhirPatient = (org.hl7.fhir.r4.model.Patient) patBundle.getEntryFirstRep().getResource();
-                System.out.println(">>>: " + fhirContext.newJsonParser().encodeResourceToString(fhirPatient));
+                LogEvent.logDebug(this.getClass().getName(), "getLatestFhirforETL",   fhirContext.newJsonParser().encodeResourceToString(fhirPatient));
             }
             
             //sp
-            System.out.println(">>>: " + fhirObservation.getSpecimen().getReference().toString());
+            LogEvent.logDebug(this.getClass().getName(), "getLatestFhirforETL",   fhirObservation.getSpecimen().getReference().toString());
             String spString = fhirObservation.getSpecimen().getReference().toString();
             String spUuidString = spString.substring(spString.lastIndexOf("/") + 1);
 
@@ -1127,13 +1152,9 @@ public class FhirTransformServiceImpl implements FhirTransformService {
 
             if (spBundle.hasEntry()) {
                 fhirSpecimen = (Specimen) spBundle.getEntryFirstRep().getResource();
-                System.out.println(">>>: " + fhirContext.newJsonParser().encodeResourceToString(fhirSpecimen));
+                LogEvent.logDebug(this.getClass().getName(), "getLatestFhirforETL",   fhirContext.newJsonParser().encodeResourceToString(fhirSpecimen));
             }
 
-            //        List<String> observationList = LoadObservations();
-            //        List<String> patientList = LoadPatients();
-            //        List<String> serviceRequestList = LoadServiceRequests();
-            //        List<String> specimenList = LoadSpecimens();
             List<String> practitionerList = LoadPractitioners();
 
             JSONObject jResultUUID = null;
@@ -1145,155 +1166,157 @@ public class FhirTransformServiceImpl implements FhirTransformService {
             ETLRecord etlRecord = new ETLRecord();
             try {
                 String observationStr = fhirContext.newJsonParser().encodeResourceToString(fhirObservation);
-                System.out.println("obStr:" + observationStr);
+                LogEvent.logDebug(this.getClass().getName(), "getLatestFhirforETL", observationStr);
                 JSONObject observationJson = null;
                 observationJson = JSONUtils.getAsObject(observationStr);
-                System.out.println("obJson:" + observationJson.toString());
+                LogEvent.logDebug(this.getClass().getName(), "getLatestFhirforETL", observationJson.toString());
                 if (!JSONUtils.isEmpty(observationJson)) {
 
                     org.json.simple.JSONArray identifier = JSONUtils.getAsArray(observationJson.get("identifier"));
                     for (j = 0; j < identifier.size(); ++j) {
-                        System.out.println("identifier:" + identifier.get(j).toString());
+                        LogEvent.logDebug(this.getClass().getName(), "getLatestFhirforETL", identifier.get(j).toString());
                         jResultUUID = JSONUtils.getAsObject(identifier.get(j));
-                        System.out.println("jResultUUID:" + jResultUUID.get("system").toString());
-                        System.out.println("jResultUUID:" + jResultUUID.get("value").toString());
+                        LogEvent.logDebug(this.getClass().getName(), "getLatestFhirforETL", jResultUUID.get("system").toString());
+                        LogEvent.logDebug(this.getClass().getName(), "getLatestFhirforETL", jResultUUID.get("value").toString());
                     }
-//                    System.out.println("valueString:" + observationJson.get("valueString").toString());
-                    code = JSONUtils.getAsObject(observationJson.get("valueCodeableConcept"));
-                    coding = JSONUtils.getAsArray(code.get("coding"));
-                    for (j = 0; j < coding.size(); ++j) {
-                        System.out.println("coding:" + coding.get(0).toString());
-                        jCoding = JSONUtils.getAsObject(coding.get(0));
-                        System.out.println("jCoding:" + jCoding.get("system").toString());
-                        System.out.println("jCoding:" + jCoding.get("code").toString());
-                        System.out.println("jCoding:" + jCoding.get("display").toString());
+                    try {
+                        code = JSONUtils.getAsObject(observationJson.get("valueCodeableConcept"));
+                        coding = JSONUtils.getAsArray(code.get("coding"));
+                        for (j = 0; j < coding.size(); ++j) {
+                            LogEvent.logDebug(this.getClass().getName(), "getLatestFhirforETL", coding.get(0).toString());
+                            jCoding = JSONUtils.getAsObject(coding.get(0));
+                            LogEvent.logDebug(this.getClass().getName(), "getLatestFhirforETL", jCoding.get("system").toString());
+                            LogEvent.logDebug(this.getClass().getName(), "getLatestFhirforETL", jCoding.get("code").toString());
+                            LogEvent.logDebug(this.getClass().getName(), "getLatestFhirforETL", jCoding.get("display").toString());
+                        }
+                    } catch(Exception e) { 
+                        e.printStackTrace();
                     }
                     etlRecord.setResult(jCoding.get("display").toString());
-                    System.out.println("subjectRef:" + observationJson.get("subject").toString());
+                    LogEvent.logDebug(this.getClass().getName(), "getLatestFhirforETL", observationJson.get("subject").toString());
 
                     JSONObject subjectRef = null;
                     subjectRef = JSONUtils.getAsObject(observationJson.get("subject"));
-                    System.out.println("subjectRef:" + subjectRef.get("reference"));
+                    LogEvent.logDebug(this.getClass().getName(), "getLatestFhirforETL", subjectRef.get("reference").toString());
 
                     JSONObject specimenRef = null;
                     specimenRef = JSONUtils.getAsObject(observationJson.get("specimen"));
-                    System.out.println("specimenRef:" + specimenRef.get("reference"));
+                    LogEvent.logDebug(this.getClass().getName(), "getLatestFhirforETL", specimenRef.get("reference").toString());
 
                     org.json.simple.JSONArray serviceRequestRef = null;
                     serviceRequestRef = JSONUtils.getAsArray(observationJson.get("basedOn"));
                     for (j = 0; j < serviceRequestRef.size(); ++j) {
-                        System.out.println("serviceRequestRef:" + serviceRequestRef.get(j).toString());
+                        LogEvent.logDebug(this.getClass().getName(), "getLatestFhirforETL", serviceRequestRef.get(j).toString());
                         jSRRef = JSONUtils.getAsObject(serviceRequestRef.get(j));
-                        System.out.println("jSRRef:" + jSRRef.get("reference").toString());
+                        LogEvent.logDebug(this.getClass().getName(), "getLatestFhirforETL", jSRRef.get("reference").toString());
                     }
                     etlRecord.setOrder_status(observationJson.get("status").toString());
                     etlRecord.setData(observationStr);
                 }
 
                 String patientStr = fhirContext.newJsonParser().encodeResourceToString(fhirPatient);
-                System.out.println("patStr:" + patientStr);
+                System.out.println( "patientStr: " + patientStr);
                 JSONObject patientJson = null;
                 patientJson = JSONUtils.getAsObject(patientStr);
-                System.out.println("patJson:" + patientJson.toString());
+                LogEvent.logDebug(this.getClass().getName(), "getLatestFhirforETL", patientJson.toString());
                 if (!JSONUtils.isEmpty(patientJson)) {
 
                     org.json.simple.JSONArray identifier = JSONUtils.getAsArray(patientJson.get("identifier"));
                     for (j = 0; j < identifier.size(); ++j) {
-                        System.out.println("identifier:" + identifier.get(j).toString());
+                        LogEvent.logDebug(this.getClass().getName(), "getLatestFhirforETL", identifier.get(j).toString());
                         JSONObject patIds = JSONUtils.getAsObject(identifier.get(j));
-                        System.out.println("patIds:" + patIds.get("system").toString());
-                        System.out.println("patIds:" + patIds.get("value").toString());
+                        LogEvent.logDebug(this.getClass().getName(), "getLatestFhirforETL", patIds.get("system").toString());
+                        LogEvent.logDebug(this.getClass().getName(), "getLatestFhirforETL", patIds.get("value").toString());
                         if (patIds.get("system").toString()
                                 .equalsIgnoreCase("http://openelis-global.org/pat_nationalId")) {
                             etlRecord.setIdentifier(patIds.get("value").toString());
                         }
                         etlRecord.setSex(patientJson.get("gender").toString());
-                        //                      1994-05-16
-//                        try {
-//                            String timestampToDate = patientJson.get("birthDate").toString().substring(0,10);
-//                            SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd");
-//                            Date parsedDate = dateFormat.parse(timestampToDate);
-//                            Timestamp timestamp = new java.sql.Timestamp(parsedDate.getTime());
-//                            etlRecord.setBirthdate(timestamp);
-//                        } catch(Exception e) { 
-//                            e.printStackTrace();
-//                        }
+                        //       1994
+                        try {
+                            //                            String timestampToDate = patientJson.get("birthDate").toString().substring(0,10);
+                            String timestampToDate = patientJson.get("birthDate").toString().substring(0,4);
+                            timestampToDate = timestampToDate +"-01-01";
+                            SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd");
+                            Date parsedDate = dateFormat.parse(timestampToDate);
+                            Timestamp timestamp = new java.sql.Timestamp(parsedDate.getTime());
+                            etlRecord.setBirthdate(timestamp);
+                        } catch (Exception e) {
+                            e.printStackTrace();
+                        }
                     }
 
                     org.json.simple.JSONArray name = JSONUtils.getAsArray(patientJson.get("name"));
                     for (j = 0; j < name.size(); ++j) {
-                        System.out.println("name:" + name.get(j).toString());
+                        LogEvent.logDebug(this.getClass().getName(), "getLatestFhirforETL", name.get(j).toString());
                         JSONObject jName = JSONUtils.getAsObject(name.get(j));
-                        System.out.println("jName:" + jName.get("family").toString());
-                        System.out.println("jName:" + jName.get("given").toString());
+                        LogEvent.logDebug(this.getClass().getName(), "getLatestFhirforETL", jName.get("family").toString());
+                        LogEvent.logDebug(this.getClass().getName(), "getLatestFhirforETL", jName.get("given").toString());
                         etlRecord.setLast_name(jName.get("family").toString());
                         org.json.simple.JSONArray givenName = JSONUtils.getAsArray(jName.get("given"));
                         etlRecord.setFirst_name(givenName.get(0).toString());
                     }
 
-//                    org.json.simple.JSONArray address = JSONUtils.getAsArray(patientJson.get("address"));
-//                    for (j = 0; j < name.size(); ++j) {
-//                        System.out.println("address:" + address.get(j).toString());
-//                        JSONObject jAddress = JSONUtils.getAsObject(address.get(j));
-//                        System.out.println("jAddress:" + jAddress.get("line").toString());
-//                        System.out.println("jAddress:" + jAddress.get("city").toString());
-//                        System.out.println("jAddress:" + jAddress.get("country").toString());
-//                        etlRecord.setAddress_street(jAddress.get("line").toString());
-//                        etlRecord.setAddress_city(jAddress.get("city").toString());
-//                        etlRecord.setAddress_country(jAddress.get("country").toString());
-//                    }
+                    org.json.simple.JSONArray address = JSONUtils.getAsArray(patientJson.get("address"));
+                    for (j = 0; j < name.size(); ++j) {
+                        JSONObject jAddress = JSONUtils.getAsObject(address.get(j));
+                        org.json.simple.JSONArray jLines = JSONUtils.getAsArray(jAddress.get("line"));
+                        etlRecord.setAddress_street(jLines.get(0).toString());
+                        etlRecord.setAddress_city(jAddress.get("city").toString());
+                        etlRecord.setAddress_country(jAddress.get("country").toString());
+                    }
 
                     org.json.simple.JSONArray telecom = JSONUtils.getAsArray(patientJson.get("telecom"));
                     for (j = 0; j < telecom.size(); ++j) {
-                        System.out.println("telecom:" + telecom.get(j).toString());
+                        LogEvent.logDebug(this.getClass().getName(), "getLatestFhirforETL", telecom.get(j).toString());
                         JSONObject jTelecom = JSONUtils.getAsObject(telecom.get(j));
 
-                        if (jTelecom.get("system").toString().equalsIgnoreCase("home phone")) {
-                            System.out.println("jTelecom:" + jTelecom.get("system").toString());
-                            System.out.println("jTelecom:" + jTelecom.get("value").toString());
+                        if (jTelecom.get("system").toString().equalsIgnoreCase("other")) {
+                            LogEvent.logDebug(this.getClass().getName(), "getLatestFhirforETL", jTelecom.get("system").toString());
+                            LogEvent.logDebug(this.getClass().getName(), "getLatestFhirforETL", jTelecom.get("value").toString());
                             etlRecord.setHome_phone(jTelecom.get("value").toString());
-                        } else if (jTelecom.get("system").toString().equalsIgnoreCase("work phone")) {
-                            System.out.println("jTelecom:" + jTelecom.get("system").toString());
-                            System.out.println("jTelecom:" + jTelecom.get("value").toString());
+                        } else if (jTelecom.get("system").toString().equalsIgnoreCase("sms")) {
+                            LogEvent.logDebug(this.getClass().getName(), "getLatestFhirforETL", jTelecom.get("system").toString());
+                            LogEvent.logDebug(this.getClass().getName(), "getLatestFhirforETL", jTelecom.get("value").toString());
                             etlRecord.setWork_phone(jTelecom.get("value").toString());
                         }
                     }
+                    etlRecord.setPatientId(fhirPatient.getId());
                 }
 
                 String serviceRequestStr = fhirContext.newJsonParser().encodeResourceToString(fhirServiceRequest);
-                System.out.println("srStr:" + serviceRequestStr);
+                LogEvent.logDebug(this.getClass().getName(), "getLatestFhirforETL", serviceRequestStr);
                 JSONObject srJson = null;
                 srJson = JSONUtils.getAsObject(serviceRequestStr);
-                System.out.println("srJson:" + srJson.toString());
-               
+                LogEvent.logDebug(this.getClass().getName(), "getLatestFhirforETL", srJson.toString());
+
                 if (!JSONUtils.isEmpty(srJson)) {
 
                     org.json.simple.JSONArray identifier = JSONUtils.getAsArray(srJson.get("identifier"));
                     for (j = 0; j < identifier.size(); ++j) {
-                        System.out.println("identifier:" + identifier.get(j).toString());
+                        LogEvent.logDebug(this.getClass().getName(), "getLatestFhirforETL", identifier.get(j).toString());
                         JSONObject srIds = JSONUtils.getAsObject(identifier.get(j));
-                        System.out.println("srIds:" + srIds.get("system").toString());
-                        System.out.println("srIds:" + srIds.get("value").toString());
+                        LogEvent.logDebug(this.getClass().getName(), "getLatestFhirforETL", srIds.get("system").toString());
+                        LogEvent.logDebug(this.getClass().getName(), "getLatestFhirforETL", srIds.get("value").toString());
                     }
 
                     reqRef = JSONUtils.getAsObject(srJson.get("requisition"));
-                    System.out.println("srReq:" + reqRef.get("system").toString());
-                    System.out.println("srReq:" + reqRef.get("value").toString());
+                    LogEvent.logDebug(this.getClass().getName(), "getLatestFhirforETL", reqRef.get("system").toString());
+                    LogEvent.logDebug(this.getClass().getName(), "getLatestFhirforETL", reqRef.get("value").toString());
                     etlRecord.setLabno(reqRef.get("value").toString());
 
-                    // gnr
                     code = JSONUtils.getAsObject(srJson.get("code"));
                     coding = JSONUtils.getAsArray(code.get("coding"));
                     
                     org.json.simple.JSONArray jCategoryArray = JSONUtils.getAsArray(srJson.get("category"));
-                    System.out.println("catArray:" + jCategoryArray.get(0).toString());
+                    LogEvent.logDebug(this.getClass().getName(), "getLatestFhirforETL", jCategoryArray.get(0).toString());
                     JSONObject jCatJson = (JSONObject) jCategoryArray.get(0);
                     coding = JSONUtils.getAsArray(jCatJson.get("coding"));
                     for (j = 0; j < coding.size(); ++j) {
                         jCoding = (JSONObject) coding.get(j);
-                        System.out.println("jCoding:" + jCoding.get("system").toString());
-                        System.out.println("jCoding:" + jCoding.get("code").toString());
-                        System.out.println("jCoding:" + jCoding.get("display").toString());
+                        LogEvent.logDebug(this.getClass().getName(), "getLatestFhirforETL", jCoding.get("system").toString());
+                        LogEvent.logDebug(this.getClass().getName(), "getLatestFhirforETL", jCoding.get("code").toString());
+                        LogEvent.logDebug(this.getClass().getName(), "getLatestFhirforETL", jCoding.get("display").toString());
                     }
                     etlRecord.setProgram(jCoding.get("display").toString());
 
@@ -1310,12 +1333,14 @@ public class FhirTransformServiceImpl implements FhirTransformService {
                     code = JSONUtils.getAsObject(srJson.get("code"));
                     coding = JSONUtils.getAsArray(code.get("coding"));
                     for (j = 0; j < coding.size(); ++j) {
-                        System.out.println("coding:" + coding.get(0).toString());
+                        LogEvent.logDebug(this.getClass().getName(), "getLatestFhirforETL", coding.get(0).toString());
                         jCoding = JSONUtils.getAsObject(coding.get(0));
-                        System.out.println("jCoding:" + jCoding.get("system").toString());
-                        System.out.println("jCoding:" + jCoding.get("code").toString());
-                        System.out.println("jCoding:" + jCoding.get("display").toString());
+                        LogEvent.logDebug(this.getClass().getName(), "getLatestFhirforETL", jCoding.get("system").toString());
+//                        LogEvent.logDebug(this.getClass().getName(), "getLatestFhirforETL", jCoding.get("code").toString());
+                        LogEvent.logDebug(this.getClass().getName(), "getLatestFhirforETL", jCoding.get("display").toString());
                     }
+                    
+                    etlRecord.setTest(jCoding.get("display").toString()); //test description
 
                     //                    2021-05-06T12:51:58-07:00
                     try {
@@ -1327,33 +1352,47 @@ public class FhirTransformServiceImpl implements FhirTransformService {
                     } catch(Exception e) { 
                         e.printStackTrace();
                     }
+                    
+                    // done here because data_entered is used for age
+                    LocalDate birthdate = LocalDate.parse(etlRecord.getBirthdate().toString().substring(0,10));
+                    LocalDate date_entered = LocalDate.parse(etlRecord.getDate_entered().toString().substring(0,10));
+                    if ((etlRecord.getBirthdate() != null) && (etlRecord.getDate_entered() != null)) {
+                        int age_days = Period.between(birthdate, date_entered).getDays();
+                        int age_years = Period.between(birthdate, date_entered).getYears();
+                        int age_months = Period.between(birthdate, date_entered).getMonths();
+                        int age_weeks = Math.round(age_days)/7;
 
-                    etlRecord.setTest(jCoding.get("display").toString()); //test description
+                        if (age_days > 3) etlRecord.setAge_weeks(age_weeks + 1);
+                        if (age_weeks > 2) etlRecord.setAge_months(age_months + 1);
+                        etlRecord.setAge_years((age_months > 5) ? age_years + 1 : age_years);
+                        etlRecord.setAge_months((12*age_years) + age_months); 
+                        etlRecord.setAge_weeks((52*age_years) + (4*age_months) + age_weeks); 
+                    }
                 }
 
                 String specimenStr = fhirContext.newJsonParser().encodeResourceToString(fhirSpecimen);
-                System.out.println("specimenStr:" + specimenStr);
+                LogEvent.logDebug(this.getClass().getName(), "getLatestFhirforETL", specimenStr);
                 JSONObject specimenJson = null;
                 specimenJson = JSONUtils.getAsObject(specimenStr);
-                System.out.println("specimenJson:" + specimenJson.toString());
+                LogEvent.logDebug(this.getClass().getName(), "getLatestFhirforETL", specimenJson.toString());
                 if (!JSONUtils.isEmpty(specimenJson)) {
 
                     org.json.simple.JSONArray identifier = JSONUtils.getAsArray(specimenJson.get("identifier"));
                     for (j = 0; j < identifier.size(); ++j) {
-                        System.out.println("identifier:" + identifier.get(j).toString());
+                        LogEvent.logDebug(this.getClass().getName(), "getLatestFhirforETL", identifier.get(j).toString());
                         JSONObject specimenId = JSONUtils.getAsObject(identifier.get(j));
-                        System.out.println("specimenId:" + specimenId.get("system").toString());
-                        System.out.println("specimenId:" + specimenId.get("value").toString());
+                        LogEvent.logDebug(this.getClass().getName(), "getLatestFhirforETL", specimenId.get("system").toString());
+                        LogEvent.logDebug(this.getClass().getName(), "getLatestFhirforETL", specimenId.get("value").toString());
                     }
 
                     code = JSONUtils.getAsObject(specimenJson.get("type"));
                     coding = JSONUtils.getAsArray(code.get("coding"));
                     for (j = 0; j < coding.size(); ++j) {
-                        System.out.println("coding:" + coding.get(0).toString());
+                        LogEvent.logDebug(this.getClass().getName(), "getLatestFhirforETL", coding.get(0).toString());
                         jCoding = JSONUtils.getAsObject(coding.get(0));
-                        System.out.println("jCoding:" + jCoding.get("system").toString());
-                        System.out.println("jCoding:" + jCoding.get("code").toString());
-                        System.out.println("jCoding:" + jCoding.get("display").toString());
+                        LogEvent.logDebug(this.getClass().getName(), "getLatestFhirforETL", jCoding.get("system").toString());
+                        LogEvent.logDebug(this.getClass().getName(), "getLatestFhirforETL", jCoding.get("code").toString());
+                        LogEvent.logDebug(this.getClass().getName(), "getLatestFhirforETL", jCoding.get("display").toString());
                     }
                     //                  2021-04-29T16:58:51-07:00
                     try {
@@ -1368,53 +1407,30 @@ public class FhirTransformServiceImpl implements FhirTransformService {
                 }
 
                 String practitionerStr = practitionerList.get(0);
-                System.out.println("practitionerStr:" + practitionerStr);
+                LogEvent.logDebug(this.getClass().getName(), "getLatestFhirforETL", practitionerStr);
                 JSONObject practitionerJson = null;
                 practitionerJson = JSONUtils.getAsObject(practitionerStr);
-                System.out.println("practitionerJson:" + practitionerJson.toString());
+                LogEvent.logDebug(this.getClass().getName(), "getLatestFhirforETL", practitionerJson.toString());
                 if (!JSONUtils.isEmpty(practitionerJson)) {
                     org.json.simple.JSONArray name = JSONUtils.getAsArray(practitionerJson.get("name"));
                     for (j = 0; j < name.size(); ++j) {
-                        System.out.println("name:" + name.get(j).toString());
+                        LogEvent.logDebug(this.getClass().getName(), "getLatestFhirforETL", name.get(j).toString());
                         JSONObject jName = JSONUtils.getAsObject(name.get(j));
-                        System.out.println("jName:" + jName.get("family").toString());
-                        System.out.println("jName:" + jName.get("given").toString());
+                        LogEvent.logDebug(this.getClass().getName(), "getLatestFhirforETL", jName.get("family").toString());
+                        LogEvent.logDebug(this.getClass().getName(), "getLatestFhirforETL", jName.get("given").toString());
                         org.json.simple.JSONArray givenName = JSONUtils.getAsArray(jName.get("given"));
                         etlRecord.setReferer(givenName.get(0).toString() + " " + 
                                 jName.get("family").toString());
                     }
                 }
-
-//                LocalDate birthdate = LocalDate.parse(etlRecord.getBirthdate().toString().substring(0,10));
-//                LocalDate date_entered = LocalDate.parse(etlRecord.getDate_entered().toString().substring(0,10));
-//                if ((etlRecord.getBirthdate() != null) && (etlRecord.getDate_entered() != null)) {
-//                    int age_days = Period.between(birthdate, date_entered).getDays();
-//                    int age_years = Period.between(birthdate, date_entered).getYears();
-//                    int age_months = Period.between(birthdate, date_entered).getMonths();
-//                    int age_weeks = Math.round(age_days)/7;
-//
-//                    if (age_days > 3) etlRecord.setAge_weeks(age_weeks + 1);
-//                    if (age_weeks > 2) etlRecord.setAge_months(age_months + 1);
-//                    if (age_months > 5) etlRecord.setAge_years(age_years+ 1);
-//
-//                    etlRecord.setAge_months((12*age_years) + age_months); 
-//                    etlRecord.setAge_weeks((52*age_years) + (4*age_months) + age_weeks); 
-//                }
-                
-              etlRecord.setAge_weeks(22*52);
-              etlRecord.setAge_months(22*12);
-              etlRecord.setAge_years(22);
-
             } catch (org.json.simple.parser.ParseException e) {
                 e.printStackTrace();
             }
-
+            
             etlRecordList.add(etlRecord);
         }
         return etlRecordList;
     }
-    
-
     
     @Override
     public List<String> LoadPractitioners() {
@@ -1429,8 +1445,8 @@ public class FhirTransformServiceImpl implements FhirTransformService {
         +"        \"source\": \"#B5UHocnLZEvaLUgl\"" 
         +"      }," 
         +"      \"name\": [ {" 
-        +"        \"family\": \"Found\"," 
-        +"        \"given\": [ \"Not\" ]" 
+        +"        \"family\": \"\"," 
+        +"        \"given\": [ \"\" ]" 
         +"      } ]," 
         +"      \"telecom\": [ {" 
         +"        \"system\": \"phone\"" 
