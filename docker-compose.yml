@@ -1,5 +1,15 @@
 version: '3.3'
 services:
+
+    pgadmin:
+      image: dpage/pgadmin4
+      ports:
+        - "5555:80"
+      environment:
+        PGADMIN_DEFAULT_EMAIL: pgadmin4@pgadmin.org
+        PGADMIN_DEFAULT_PASSWORD: clinlims
+      restart: unless-stopped
+
     database:
         container_name: openelisglobal-database 
         image: postgres:9.5
@@ -38,6 +48,26 @@ services:
 #             - source: keystore
 #             - source: truststore
 #             - source: common.properties
+#
+
+    fhir-hose.openelis.org:
+        image: fhir-hose
+        build:
+            context: ../bulk-data-requester/
+            dockerfile: docker/docker-build/Dockerfile
+        restart: always
+        secrets:
+            - source: keystore
+            - source: truststore
+
+        extra_hosts:
+#    this should be the loopback to the docker host. 
+#    run 
+#    /sbin/ip route|awk '/default/ { print $3 }' 
+#    inside the container to make sure the ip address is correct
+#    make sure connections to 8446 are allowed by your firewall
+# docker inspect -f '{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}' hapi-fhir-jpaserver
+            - host.openelis.org:172.25.0.1
             
     fhir.openelis.org:
         container_name: hapi-fhir-jpaserver

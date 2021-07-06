@@ -589,7 +589,8 @@ public class FhirTransformServiceImpl implements FhirTransformService {
         }
         serviceRequest.setPriority(ServiceRequestPriority.ROUTINE);
         serviceRequest.setCode(transformTestToCodeableConcept(test.getId()));
-        serviceRequest.setAuthoredOn(new Date());
+        serviceRequest.setAuthoredOn(sample.getEnteredDate());
+        
         for (Note note : noteService.getNotes(analysis)) {
             serviceRequest.addNote(transformNoteToAnnotation(note));
         }
@@ -603,16 +604,18 @@ public class FhirTransformServiceImpl implements FhirTransformService {
             serviceRequest
                     .setRequester(this.createReferenceFor(ResourceType.Practitioner, provider.getFhirUuidAsString()));
         }
+        
         // sample.getReferringId needs to be the org uuid
-//        serviceRequest.addLocationReference(this.createReferenceFor(ResourceType.Person, sample.getReferringId()));
+//        serviceRequest.addLocationReference(this.createReferenceFor(ResourceType.Organization, sample.getReferringId()));
 
         return serviceRequest;
     }
 
     private CodeableConcept transformSampleProgramToCodeableConcept(ObservationHistory program) {
+        String programName = dictionaryService.getDictionaryById(program.getValue()).getDictEntry();
         CodeableConcept codeableConcept = new CodeableConcept();
         codeableConcept.addCoding(
-                new Coding(fhirConfig.getOeFhirSystem() + "/sample_program", program.getValue(), program.getValue()));
+                new Coding(fhirConfig.getOeFhirSystem() + "/sample_program", programName, programName)); 
         return codeableConcept;
     }
 
@@ -652,7 +655,7 @@ public class FhirTransformServiceImpl implements FhirTransformService {
                 sampleItem.getSample().getAccessionNumber() + "-" + sampleItem.getSortOrder()));
         specimen.setStatus(SpecimenStatus.AVAILABLE);
         specimen.setType(transformTypeOfSampleToCodeableConcept(sampleItem.getTypeOfSample()));
-        specimen.setReceivedTime(new Date());
+        specimen.setReceivedTime(sampleItem.getCollectionDate());
         specimen.setCollection(transformToCollection(sampleItem.getCollectionDate(), sampleItem.getCollector()));
 
         for (Analysis analysis : analysisService.getAnalysesBySampleItem(sampleItem)) {
@@ -1097,6 +1100,7 @@ public class FhirTransformServiceImpl implements FhirTransformService {
         org.hl7.fhir.r4.model.Patient fhirPatient = new org.hl7.fhir.r4.model.Patient();
         org.hl7.fhir.r4.model.Observation fhirObservation = new org.hl7.fhir.r4.model.Observation();
         org.hl7.fhir.r4.model.ServiceRequest fhirServiceRequest = new org.hl7.fhir.r4.model.ServiceRequest();
+        org.hl7.fhir.r4.model.Practitioner fhirPractitioner = new org.hl7.fhir.r4.model.Practitioner();
         org.hl7.fhir.r4.model.Specimen fhirSpecimen = new org.hl7.fhir.r4.model.Specimen();
         IGenericClient localFhirClient = fhirUtil.getFhirClient(fhirConfig.getLocalFhirStorePath());
         org.json.simple.JSONObject code = null;
@@ -1121,7 +1125,18 @@ public class FhirTransformServiceImpl implements FhirTransformService {
             if (srBundle.hasEntry()) {
                 fhirServiceRequest = (ServiceRequest) srBundle.getEntryFirstRep().getResource();
                 LogEvent.logDebug(this.getClass().getName(), "getLatestFhirforETL",   fhirContext.newJsonParser().encodeResourceToString(fhirServiceRequest));
-                //                    get Practitioner
+                //  get Practitioner
+                String pracString = fhirServiceRequest.getBasedOnFirstRep().getReference().toString();
+                String pracUuidString = pracString.substring(srString.lastIndexOf("/") + 1);
+                Bundle pracBundle = (Bundle) localFhirClient.search().forResource(Practitioner.class)
+                        .where(new TokenClientParam("_id").exactly().code(pracUuidString))
+                        .prettyPrint()
+                        .execute();
+
+                if (pracBundle.hasEntry()) {
+                    fhirPractitioner = (Practitioner) pracBundle.getEntryFirstRep().getResource();
+                    LogEvent.logDebug(this.getClass().getName(), "getLatestFhirforETL",   fhirContext.newJsonParser().encodeResourceToString(fhirServiceRequest));
+                }
             }
 
             //pat
@@ -1325,10 +1340,8 @@ public class FhirTransformServiceImpl implements FhirTransformService {
 //                    System.out.println("srReq:" + reqRef.get("value").toString());
 //                    etlRecord.setCode_referer(reqRef.get("value").toString());
                     
-//                    requester is practitioner
-//                    reqRef = JSONUtils.getAsObject(srJson.get("requester"));
-//                    System.out.println("srReq:" + reqRef.get("reference").toString());
-//                    etlRecord.setReferer(reqRef.get("reference").toString());
+                    etlRecord.setReferer(fhirPractitioner.getName().get(0).getGivenAsSingleString() + 
+                            fhirPractitioner.getName().get(0).getFamily());
 
                     code = JSONUtils.getAsObject(srJson.get("code"));
                     coding = JSONUtils.getAsArray(code.get("coding"));
@@ -1401,6 +1414,18 @@ public class FhirTransformServiceImpl implements FhirTransformService {
                         Date parsedDate = dateFormat.parse(timestampToDate);
                         Timestamp timestamp = new java.sql.Timestamp(parsedDate.getTime());
                         etlRecord.setDate_recpt(timestamp);
+                    } catch(Exception e) { 
+                        e.printStackTrace();
+                    }
+                    
+                    JSONObject jCollection = JSONUtils.getAsObject(specimenJson.get("collection"));
+                    JSONObject jCollectedDateTime = JSONUtils.getAsObject(jCollection.get("collectedDateTime"));
+                    try {
+                        String timestampToDate = jCollectedDateTime.get("collection").toString().substring(0,10);
+                        SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd");
+                        Date parsedDate = dateFormat.parse(timestampToDate);
+                        Timestamp timestamp = new java.sql.Timestamp(parsedDate.getTime());
+                        etlRecord.setDate_collect(timestamp);
                     } catch(Exception e) { 
                         e.printStackTrace();
                     }
